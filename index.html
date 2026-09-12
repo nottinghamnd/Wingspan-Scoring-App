@@ -1,0 +1,2135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Wingspan Scorekeeper</title>
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --bg:#04060c;
+  --panel:rgba(255,255,255,.045);
+  --panel-2:rgba(255,255,255,.075);
+  --line:rgba(255,255,255,.10);
+  --line-2:rgba(255,255,255,.20);
+  --txt:#e9eef8;
+  --muted:#8d99b2;
+  --dim:#5b667e;
+
+  --cyan:#3ee8d0;
+  --violet:#a78bfa;
+  --amber:#fbbf24;
+  --egg:#e7edfb;
+  --rose:#fb7185;
+  --blue:#60a5fa;
+  --orange:#fb923c;
+  --lime:#a3e635;
+
+  --r-sm:10px; --r:16px; --r-lg:22px;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --ease-io:cubic-bezier(.65,0,.35,1);
+  --maxw:1080px;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; min-height:100vh; background:var(--bg); color:var(--txt);
+  font:400 15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+::selection{background:rgba(62,232,208,.28)}
+
+/* ============================================================
+   BACKDROP
+   ============================================================ */
+.aurora{position:fixed;inset:0;z-index:-3;pointer-events:none;overflow:hidden}
+.aurora span{position:absolute;display:block;border-radius:50%;filter:blur(100px);will-change:transform}
+.a1{width:62vw;height:62vw;left:-18vw;top:-26vw;background:radial-gradient(circle,rgba(62,232,208,.30),transparent 68%);animation:drift1 26s var(--ease-io) infinite}
+.a2{width:56vw;height:56vw;right:-16vw;top:-14vw;background:radial-gradient(circle,rgba(167,139,250,.28),transparent 68%);animation:drift2 32s var(--ease-io) infinite}
+.a3{width:70vw;height:52vw;left:22vw;bottom:-34vw;background:radial-gradient(circle,rgba(251,146,60,.16),transparent 70%);animation:drift3 38s var(--ease-io) infinite}
+@keyframes drift1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(6vw,5vw,0) scale(1.12)}}
+@keyframes drift2{0%,100%{transform:translate3d(0,0,0) scale(1.05)}50%{transform:translate3d(-7vw,7vw,0) scale(.92)}}
+@keyframes drift3{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-5vw,-4vw,0) scale(1.15)}}
+.grid-bg{
+  position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);
+  background-size:72px 72px;
+  -webkit-mask-image:radial-gradient(ellipse 100% 76% at 50% 0%,#000 12%,transparent 78%);
+          mask-image:radial-gradient(ellipse 100% 76% at 50% 0%,#000 12%,transparent 78%);
+}
+.vignette{position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(ellipse 120% 90% at 50% 40%,transparent 45%,rgba(0,0,0,.55) 100%)}
+
+/* ============================================================
+   CHROME
+   ============================================================ */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;align-items:center;gap:18px;
+  padding:14px clamp(16px,4vw,34px);
+  background:linear-gradient(180deg,rgba(4,6,12,.94),rgba(4,6,12,.6) 70%,transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+.brand{display:flex;align-items:center;gap:11px;flex:0 0 auto}
+.brand svg{width:30px;height:30px;filter:drop-shadow(0 0 12px rgba(62,232,208,.5))}
+.brand b{font-size:15px;font-weight:650;letter-spacing:.22em;text-transform:uppercase}
+.brand i{font-style:normal;font-size:11px;color:var(--dim);letter-spacing:.20em;text-transform:uppercase;
+  padding-left:11px;margin-left:2px;border-left:1px solid var(--line)}
+.topbar{flex-wrap:wrap;row-gap:12px}
+.topbar .spacer{flex:1;order:1}
+.topbar .ghost-btn{order:2}
+.rail{order:3;flex-basis:100%}
+.rail:empty{display:none}
+.ghost-btn{
+  padding:8px 15px;border-radius:999px;border:1px solid var(--line);
+  color:var(--muted);font-size:12.5px;font-weight:550;letter-spacing:.06em;
+  transition:.28s var(--ease);white-space:nowrap;
+}
+.ghost-btn:hover{color:var(--txt);border-color:var(--line-2);background:var(--panel)}
+
+main{max-width:var(--maxw);margin:0 auto;padding:8px clamp(16px,4vw,34px) 90px}
+
+/* ============================================================
+   TYPE
+   ============================================================ */
+.eyebrow{
+  display:inline-flex;align-items:center;gap:9px;
+  font-size:11px;font-weight:650;letter-spacing:.26em;text-transform:uppercase;color:var(--cyan);
+  margin:0 0 14px;
+}
+.eyebrow::before{content:"";width:22px;height:1px;background:linear-gradient(90deg,transparent,var(--cyan))}
+h1{margin:0 0 10px;font-size:clamp(28px,5.2vw,44px);line-height:1.06;font-weight:620;letter-spacing:-.028em}
+h1 .accent{background:linear-gradient(96deg,var(--cyan),var(--violet) 65%,var(--orange));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{margin:0 0 30px;color:var(--muted);font-size:15.5px;max-width:62ch}
+
+.screen{animation:rise .55s var(--ease) both}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/* ============================================================
+   SETUP STEPPER
+   ============================================================ */
+.setup-rail{display:flex;align-items:center;gap:10px;margin-bottom:26px;flex-wrap:wrap}
+.setup-rail .s{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--dim);
+  letter-spacing:.12em;text-transform:uppercase;font-weight:600;background:none;padding:0}
+.setup-rail .s .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--line);font-size:11px;transition:.3s var(--ease)}
+.setup-rail .s.on{color:var(--txt)}
+.setup-rail .s.on .n{background:var(--cyan);color:#03110f;border-color:var(--cyan);box-shadow:0 0 18px rgba(62,232,208,.45)}
+.setup-rail .s.done .n{background:rgba(62,232,208,.16);border-color:rgba(62,232,208,.5);color:var(--cyan)}
+.setup-rail .bar{flex:0 0 26px;height:1px;background:var(--line)}
+
+/* ============================================================
+   CARDS / PANELS
+   ============================================================ */
+.panel{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  padding:clamp(18px,3vw,26px);
+}
+.cards{display:grid;gap:13px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.tcard{
+  position:relative;text-align:left;padding:19px;border-radius:var(--r);
+  background:var(--panel);border:1px solid var(--line);
+  transition:.34s var(--ease);overflow:hidden;
+}
+.tcard:hover{border-color:var(--line-2);transform:translateY(-2px);background:var(--panel-2)}
+.tcard.on{border-color:rgba(62,232,208,.55);background:rgba(62,232,208,.075);
+  box-shadow:0 0 0 1px rgba(62,232,208,.18),0 14px 40px -18px rgba(62,232,208,.5)}
+.tcard .tn{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px}
+.tcard .tn b{font-size:16.5px;font-weight:600;letter-spacing:-.01em}
+.tcard .td{font-size:13px;color:var(--muted);line-height:1.5}
+.tcard .flag{display:inline-block;margin-top:11px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--orange);background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);
+  padding:3px 8px;border-radius:999px;font-weight:650}
+.check{width:22px;height:22px;border-radius:7px;border:1px solid var(--line-2);flex:0 0 auto;
+  display:grid;place-items:center;transition:.3s var(--ease)}
+.check svg{width:13px;height:13px;opacity:0;transform:scale(.5);transition:.3s var(--ease);stroke:#03110f}
+.tcard.on .check{background:var(--cyan);border-color:var(--cyan)}
+.tcard.on .check svg{opacity:1;transform:none}
+
+.note{
+  display:flex;gap:11px;align-items:flex-start;margin-top:18px;padding:13px 15px;
+  border-radius:var(--r-sm);border:1px solid var(--line);background:rgba(255,255,255,.028);
+  font-size:13px;color:var(--muted);line-height:1.55;
+}
+.note svg{flex:0 0 auto;width:15px;height:15px;margin-top:2px;stroke:var(--dim);fill:none}
+.note b{color:var(--txt);font-weight:600}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+.actions{display:flex;gap:12px;align-items:center;margin-top:30px;flex-wrap:wrap}
+.btn{
+  position:relative;padding:13px 26px;border-radius:999px;font-size:14.5px;font-weight:600;
+  transition:.3s var(--ease);white-space:nowrap;display:inline-flex;align-items:center;gap:9px;
+}
+.btn svg{width:16px;height:16px;fill:none}
+.btn-primary{background:linear-gradient(96deg,var(--cyan),#6ee7d8 45%,var(--violet));color:#03110f;
+  box-shadow:0 12px 34px -14px rgba(62,232,208,.85)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 44px -14px rgba(62,232,208,.95)}
+.btn-primary:disabled{opacity:.35;pointer-events:none;box-shadow:none}
+.btn-ghost{border:1px solid var(--line);color:var(--muted)}
+.btn-ghost:hover{color:var(--txt);border-color:var(--line-2);background:var(--panel)}
+.btn-danger{border:1px solid rgba(251,113,133,.4);color:var(--rose);background:rgba(251,113,133,.08)}
+.btn-danger:hover{background:rgba(251,113,133,.16);border-color:rgba(251,113,133,.65)}
+.hintline{font-size:12.5px;color:var(--dim)}
+kbd{font:inherit;font-size:11px;padding:2px 6px;border-radius:5px;border:1px solid var(--line);
+  background:rgba(255,255,255,.05);color:var(--muted)}
+
+/* ============================================================
+   PLAYERS
+   ============================================================ */
+.pills{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:24px}
+.pill{padding:11px 21px;border-radius:999px;border:1px solid var(--line);color:var(--muted);
+  font-weight:600;font-size:15px;transition:.3s var(--ease);font-variant-numeric:tabular-nums}
+.pill:hover{color:var(--txt);border-color:var(--line-2)}
+.pill.on{background:var(--txt);color:#04060c;border-color:var(--txt)}
+.plist{display:grid;gap:11px}
+.prow{display:flex;align-items:center;gap:13px;padding:11px 15px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--panel);transition:.3s var(--ease)}
+.prow:focus-within{border-color:var(--line-2);background:var(--panel-2)}
+.swatch{width:32px;height:32px;border-radius:50%;flex:0 0 auto;position:relative;transition:.3s var(--ease)}
+.swatch:hover{transform:scale(1.1)}
+.swatch::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid currentColor;opacity:.32}
+.prow input{flex:1;min-width:0;background:none;border:0;outline:none;font-size:16px;font-weight:500;padding:6px 0}
+.prow input::placeholder{color:var(--dim)}
+.prow .idx{font-size:11px;color:var(--dim);letter-spacing:.16em;text-transform:uppercase;font-weight:650}
+
+/* ============================================================
+   HOUSE RULES
+   ============================================================ */
+.hr-list{display:grid;gap:11px;margin-bottom:16px}
+.hr-item{display:flex;align-items:flex-start;gap:14px;padding:15px 17px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--panel)}
+.hr-item .hb{flex:1;min-width:0}
+.hr-item .hb b{display:block;font-size:15.5px;font-weight:600;margin-bottom:3px}
+.hr-item .hb span{font-size:13px;color:var(--muted)}
+.hr-del{color:var(--dim);padding:5px;border-radius:8px;transition:.25s}
+.hr-del:hover{color:var(--rose);background:rgba(251,113,133,.1)}
+.hr-del svg{width:15px;height:15px;fill:none;stroke:currentColor}
+
+.hr-form{display:grid;gap:13px;padding:19px;border-radius:var(--r);
+  border:1px dashed var(--line-2);background:rgba(255,255,255,.022)}
+.field{display:grid;gap:6px}
+.field label{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:650}
+.field input,.field select{
+  padding:11px 13px;border-radius:var(--r-sm);border:1px solid var(--line);
+  background:rgba(0,0,0,.28);outline:none;font-size:15px;transition:.25s;width:100%;
+}
+.field input:focus,.field select:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(62,232,208,.13)}
+.field select option{background:#0b1020;color:var(--txt)}
+.f2{display:grid;gap:13px;grid-template-columns:1fr 1fr}
+@media(max-width:560px){.f2{grid-template-columns:1fr}}
+.empty-hr{text-align:center;padding:30px 18px;color:var(--dim);font-size:14px;
+  border:1px dashed var(--line);border-radius:var(--r);margin-bottom:16px}
+
+/* ============================================================
+   SCORING
+   ============================================================ */
+.rail{display:flex;gap:6px;align-items:center;overflow-x:auto;order:3;flex:0 0 100%;
+  scrollbar-width:none;padding:2px 0}
+.rail::-webkit-scrollbar{display:none}
+.rail button{
+  flex:0 0 auto;padding:6px 12px;border-radius:999px;font-size:11.5px;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border:1px solid transparent;
+  transition:.3s var(--ease);white-space:nowrap;
+}
+.rail button:hover:not(:disabled){color:var(--muted)}
+.rail button:disabled{cursor:default}
+.rail button.done{color:var(--muted)}
+.rail button.on{color:#03110f;background:var(--cyan);box-shadow:0 0 20px rgba(62,232,208,.4)}
+
+.scorehead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+.stepno{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-weight:650;
+  font-variant-numeric:tabular-nums}
+.catdot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:10px;vertical-align:middle}
+
+.srows{display:grid;gap:11px}
+.srow{
+  display:flex;align-items:center;gap:16px;padding:14px 18px;border-radius:var(--r);
+  border:1px solid var(--line);background:var(--panel);transition:.3s var(--ease);
+}
+.srow:focus-within{border-color:var(--line-2);background:var(--panel-2)}
+.srow .pn{display:flex;align-items:center;gap:11px;flex:1;min-width:0}
+.srow .pn .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 12px currentColor}
+.srow .pn span{font-size:16px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.stepper{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+.stepper button{
+  width:36px;height:36px;border-radius:11px;border:1px solid var(--line);color:var(--muted);
+  font-size:19px;line-height:1;display:grid;place-items:center;transition:.22s var(--ease);
+}
+.stepper button:hover{color:var(--txt);border-color:var(--line-2);background:var(--panel-2)}
+.stepper button:active{transform:scale(.9)}
+.stepper input{
+  width:72px;height:38px;text-align:center;border-radius:11px;border:1px solid var(--line);
+  background:rgba(0,0,0,.3);outline:none;font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;
+  transition:.25s;
+}
+.stepper input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(62,232,208,.13)}
+.stepper .quick{
+  width:auto;min-width:42px;padding:0 11px;font-size:12.5px;font-weight:650;
+  letter-spacing:.01em;color:var(--dim);margin-left:2px;
+}
+.stepper .quick:hover{color:var(--cyan);border-color:rgba(62,232,208,.45);background:rgba(62,232,208,.09)}
+@media(max-width:520px){.stepper .quick{min-width:38px;padding:0 8px;font-size:11.5px}}
+
+.pts{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:64px;text-align:right;
+  flex:0 0 auto}
+.pts b{color:var(--cyan);font-weight:650}
+
+/* goal-board place-point reference */
+.goalref{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:-18px 0 26px}
+.goalref .grl{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+  font-weight:650;margin-right:3px}
+.goalref .gr{font-size:12px;padding:4px 11px;border-radius:999px;border:1px solid var(--line);
+  color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.goalref .gr b{color:var(--amber);font-weight:650;letter-spacing:.02em}
+
+/* rounds grid */
+.srow.rounds{flex-wrap:wrap}
+.srow.stack{flex-direction:column;align-items:stretch;gap:13px}
+.srow.stack .srow-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.srow.stack .pts{text-align:right}
+.srow.stack .rcell input{width:46px}
+.rgrid{display:flex;gap:8px;flex:0 0 auto;flex-wrap:wrap}
+.rcell{display:grid;gap:5px;justify-items:center}
+.rcell label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:650}
+.rcell input{width:58px;height:38px;text-align:center;border-radius:11px;border:1px solid var(--line);
+  background:rgba(0,0,0,.3);outline:none;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;transition:.25s}
+.rcell input:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(251,191,36,.13)}
+
+/* compact spinner for the dense grids — a stacked +/- beside each cell */
+.rspin{display:flex;align-items:stretch;gap:3px}
+.rbtns{display:flex;flex-direction:column;gap:2px;flex:0 0 auto}
+.rbtns button{
+  width:22px;flex:1;border-radius:6px;border:1px solid var(--line);color:var(--dim);
+  font-size:11px;line-height:1;display:grid;place-items:center;transition:.2s var(--ease);padding:0;
+}
+.rbtns button:hover{color:var(--txt);border-color:var(--line-2);background:var(--panel-2)}
+.rbtns button:active{transform:scale(.88)}
+
+/* nectar grid */
+.ncell label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:650}
+.ncell input:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(251,146,60,.13)}
+.nectar-badge{font-size:12.5px;padding:5px 11px;border-radius:999px;font-weight:650;
+  border:1px solid rgba(251,146,60,.3);background:rgba(251,146,60,.1);color:var(--orange);
+  font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:60px;text-align:center}
+
+.lockbar{
+  display:flex;align-items:center;gap:9px;margin-top:22px;font-size:12.5px;color:var(--dim);
+}
+.lockbar svg{width:14px;height:14px;stroke:var(--dim);fill:none}
+
+/* ============================================================
+   REVEAL
+   ============================================================ */
+.reveal-wrap{padding-top:6px}
+/* category header tab */
+.cat-head{
+  display:flex;align-items:center;justify-content:center;gap:14px;
+  width:max-content;min-width:min(300px,100%);max-width:100%;
+  margin:0 auto 34px;padding:13px 30px;border-radius:15px;
+  border:1px solid var(--line);background:var(--panel);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  transition:border-color .45s var(--ease),box-shadow .45s var(--ease);
+}
+.cat-head .ch-dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto;background:var(--cyan);
+  transition:background .45s var(--ease),box-shadow .45s var(--ease)}
+.cat-head .ch-txt{text-align:center;min-width:0}
+.cat-head b{display:block;font-size:16px;font-weight:650;letter-spacing:.18em;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-head i{display:block;font-style:normal;font-size:11px;color:var(--dim);letter-spacing:.16em;
+  text-transform:uppercase;margin-top:4px;font-weight:600}
+
+.chart{display:grid;gap:14px;margin-bottom:26px}
+.crow{display:grid;grid-template-columns:minmax(96px,152px) 1fr minmax(62px,auto);gap:16px;align-items:center;
+  will-change:transform;transition:opacity .55s var(--ease),filter .55s var(--ease)}
+/* On a phone the row stacks so the bar gets the full width — the breakdown
+   segments are otherwise too narrow to tell apart. */
+@media(max-width:640px){
+  .chart{gap:22px}
+  .crow{grid-template-columns:1fr auto;grid-template-areas:"nm tot" "tk tk";gap:9px 12px;align-items:center}
+  .crow .cname{grid-area:nm}
+  .crow .tail-col{grid-area:tot;flex-direction:row;align-items:baseline;gap:10px}
+  .crow .track{grid-area:tk;height:44px}
+  .crow .cname span{font-size:16px}
+  .ctotal{font-size:21px}
+}
+.crow.dim{opacity:.26;filter:saturate(.35)}
+.crow.tiefocus .track{box-shadow:0 0 0 1px rgba(163,230,53,.55),0 0 32px -8px rgba(163,230,53,.75)}
+
+.tail-col{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.tiebadge{
+  display:none;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+  font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;
+  color:var(--lime);border:1px solid rgba(163,230,53,.42);background:rgba(163,230,53,.11);
+  animation:rise .45s var(--ease) both;
+}
+.tiebadge.on{display:inline-flex}
+.tiebadge svg{width:11px;height:11px;fill:currentColor;flex:0 0 auto}
+.crow.tiewin .tiebadge{color:#04060c;background:var(--lime);border-color:var(--lime);
+  box-shadow:0 0 18px -2px rgba(163,230,53,.8)}
+.crow .cname{display:flex;align-items:center;gap:9px;min-width:0}
+.crow .cname .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 12px currentColor}
+.crow .cname span{font-size:15.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow .cname .rank{font-size:11px;color:var(--dim);font-weight:700;width:18px;flex:0 0 auto;
+  font-variant-numeric:tabular-nums;opacity:0;transition:.4s var(--ease)}
+.track{position:relative;height:38px;border-radius:10px;background:rgba(255,255,255,.045);
+  border:1px solid var(--line)}
+.segs{display:flex;height:100%;width:100%;border-radius:9px;overflow:hidden}
+.seg{height:100%;width:0;position:relative;flex:0 0 auto;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22);
+  transition:opacity .35s var(--ease),filter .35s var(--ease)}
+
+/* inspect mode — one category pulled out of the stack */
+.chart.inspecting .seg{opacity:.18;filter:saturate(.35)}
+.chart.inspecting .seg.lit{opacity:1;filter:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.6),0 0 20px rgba(255,255,255,.22)}
+.chart.inspecting .ctotal{font-size:14px;color:var(--dim);font-weight:600}
+.chart.inspecting .ticks{opacity:.16}
+.ticks{transition:opacity .35s var(--ease)}
+.insp{display:none;text-align:right;font-size:23px;font-weight:750;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;line-height:1.1;animation:rise .35s var(--ease) both}
+.insp.on{display:block}
+.insp-hint{margin:15px 0 0;font-size:12.5px;color:var(--dim)}
+.insp-hint b{color:var(--muted);font-weight:650}
+.lg{cursor:default}
+.lg.clickable{cursor:pointer}
+.lg.clickable:hover{color:var(--txt);border-color:var(--line-2);background:var(--panel-2);transform:translateY(-1px)}
+.lg.sel{font-weight:700;transform:none}
+@media(max-width:640px){
+  .insp{font-size:21px}
+  .chart.inspecting .ctotal{font-size:13px}
+}
+/* one faint division per point, drawn only when a point is wide enough to read */
+.ticks{position:absolute;inset:0;border-radius:9px;pointer-events:none;opacity:.5}
+
+/* travelling marker + running increment, mirroring the official app's leading token */
+.head{position:absolute;top:50%;left:0;width:14px;height:14px;border-radius:50%;
+  transform:translate(-50%,-50%);z-index:2;opacity:0;
+  box-shadow:0 0 0 3px rgba(4,6,12,.85),0 0 16px 2px currentColor}
+.add{position:absolute;top:50%;left:0;z-index:2;opacity:0;white-space:nowrap;
+  font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em;
+  padding:3px 9px;border-radius:999px;border:1px solid currentColor;
+  background:rgba(4,6,12,.86);box-shadow:0 3px 14px rgba(0,0,0,.6)}
+.ctotal{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right;
+  letter-spacing:-.02em;transition:color .4s}
+.crow.lead .ctotal{color:var(--cyan);text-shadow:0 0 22px rgba(62,232,208,.55)}
+.crow.win .track{box-shadow:0 0 0 1px rgba(251,191,36,.55),0 0 36px -6px rgba(251,191,36,.6)}
+.crow.win .cname span{color:var(--amber)}
+
+.legend{display:flex;flex-wrap:wrap;gap:8px}
+.lg{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+  border:1px solid var(--line);font-size:12px;color:var(--muted);transition:.3s var(--ease);
+  font-variant-numeric:tabular-nums}
+.lg i{width:9px;height:9px;border-radius:3px;display:block}
+.lg.hot{color:var(--txt);border-color:var(--line-2);background:var(--panel-2);transform:translateY(-1px)}
+
+.skip{display:inline-flex;align-items:center;gap:8px;
+  margin-top:22px;font-size:12px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;
+  border:1px solid var(--line);padding:7px 15px;border-radius:999px;transition:.3s var(--ease)}
+.skip:hover{color:var(--muted);border-color:var(--line-2)}
+.skip svg{width:13px;height:13px;fill:none;stroke:currentColor}
+.skip.replay:hover{color:var(--cyan);border-color:rgba(62,232,208,.45);background:rgba(62,232,208,.08)}
+.skip.replay:hover svg{transform:rotate(-180deg)}
+.skip.replay svg{transition:transform .5s var(--ease)}
+
+#confetti{position:fixed;inset:0;z-index:60;pointer-events:none}
+
+/* ============================================================
+   PODIUM
+   ============================================================ */
+.results-tail{opacity:0;transform:translateY(20px);transition:.8s var(--ease);pointer-events:none}
+.results-tail.show{opacity:1;transform:none;pointer-events:auto}
+
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:clamp(10px,2.6vw,24px);
+  margin:44px 0 34px;min-height:250px}
+.ped{display:flex;flex-direction:column;align-items:center;gap:0;flex:0 1 190px;min-width:0;max-width:200px}
+.ped .who{text-align:center;margin-bottom:13px;width:100%}
+.ped .who .nm{font-size:15.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  margin-bottom:2px}
+.ped .who .sc{font-size:30px;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1.1}
+.ped .who .sc small{font-size:12px;font-weight:600;color:var(--dim);letter-spacing:.14em;margin-left:5px}
+.ped .crown{font-size:26px;margin-bottom:7px;filter:drop-shadow(0 0 16px rgba(251,191,36,.7));
+  animation:bob 2.6s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.ped .block{
+  width:100%;border-radius:14px 14px 4px 4px;display:grid;place-items:center;
+  border:1px solid var(--line-2);position:relative;overflow:hidden;
+}
+.ped .block .pl{font-size:38px;font-weight:800;opacity:.32;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.ped.p1 .block{height:154px;background:linear-gradient(180deg,rgba(251,191,36,.34),rgba(251,191,36,.05));
+  border-color:rgba(251,191,36,.5);box-shadow:0 0 50px -12px rgba(251,191,36,.6)}
+.ped.p2 .block{height:112px;background:linear-gradient(180deg,rgba(226,232,240,.26),rgba(226,232,240,.04));
+  border-color:rgba(226,232,240,.34)}
+.ped.p3 .block{height:82px;background:linear-gradient(180deg,rgba(251,146,60,.24),rgba(251,146,60,.04));
+  border-color:rgba(251,146,60,.34)}
+
+.table{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--panel)}
+.table .th,.table .tr{display:grid;align-items:center;gap:10px;padding:12px 18px;
+  grid-template-columns:34px minmax(90px,1.5fr) repeat(var(--ncols),minmax(46px,1fr)) 66px}
+.table .th{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);font-weight:650;
+  background:rgba(255,255,255,.035);border-bottom:1px solid var(--line)}
+.table .tr{border-bottom:1px solid rgba(255,255,255,.05);font-variant-numeric:tabular-nums;font-size:14.5px}
+.table .tr:last-child{border-bottom:0}
+.table .tr .rk{font-weight:700;color:var(--dim)}
+.table .tr.first .rk{color:var(--amber)}
+.table .tr .nm{display:flex;align-items:center;gap:9px;min-width:0;font-weight:600}
+.table .tr .nm i{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.table .tr .nm span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.table .tr .v{text-align:center;color:var(--muted)}
+.table .tr .v.z{color:var(--dim);opacity:.45}
+.table .tr .tt{text-align:right;font-weight:750;font-size:17px}
+.table-scroll{overflow-x:auto;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.table-scroll::-webkit-scrollbar{height:8px}
+.table-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px}
+.table-scroll .table{min-width:100%;width:max-content}
+.table .th,.table .tr{grid-template-columns:34px minmax(104px,1fr) repeat(var(--ncols),minmax(58px,auto)) 70px}
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+.overlay{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:22px;
+  background:rgba(2,4,9,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  animation:fade .28s var(--ease)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.dialog{
+  width:min(460px,100%);border-radius:var(--r-lg);padding:30px;
+  background:linear-gradient(165deg,rgba(22,28,45,.97),rgba(10,14,26,.97));
+  border:1px solid var(--line-2);box-shadow:0 40px 90px -28px rgba(0,0,0,.9);
+  animation:pop .4s var(--ease);
+}
+@keyframes pop{from{opacity:0;transform:scale(.94) translateY(12px)}to{opacity:1;transform:none}}
+.dialog .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;margin-bottom:17px;
+  background:rgba(251,113,133,.13);border:1px solid rgba(251,113,133,.32)}
+.dialog .ic svg{width:22px;height:22px;stroke:var(--rose);fill:none}
+.dialog h3{margin:0 0 9px;font-size:21px;font-weight:640;letter-spacing:-.02em}
+.dialog p{margin:0 0 24px;color:var(--muted);font-size:14.5px;line-height:1.6}
+.dialog .row{display:flex;gap:11px;justify-content:flex-end;flex-wrap:wrap}
+
+.toast{
+  position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);z-index:90;
+  padding:12px 22px;border-radius:999px;font-size:13.5px;font-weight:550;
+  background:rgba(16,22,38,.96);border:1px solid var(--line-2);
+  box-shadow:0 18px 44px -16px rgba(0,0,0,.85);opacity:0;transition:.42s var(--ease);
+  display:flex;align-items:center;gap:9px;
+}
+.toast svg{width:15px;height:15px;stroke:var(--cyan);fill:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s!important;transition-duration:.05s!important}
+  .aurora span{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>
+<div class="grid-bg"></div>
+<div class="vignette"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" fill="none">
+      <path d="M3 20c6.5 1.5 11-1 14.5-6C21 9 25 6.5 29 6c-1 5.5-3.5 9.5-7.5 12.5C17 22 10.5 24.5 3 20Z"
+            fill="url(#wg)"/>
+      <path d="M8.5 23.5c4.5.8 8.5-.8 11.5-4" stroke="#0b1020" stroke-width="1.1" stroke-linecap="round" opacity=".45"/>
+      <defs><linearGradient id="wg" x1="3" y1="20" x2="29" y2="6">
+        <stop stop-color="#3ee8d0"/><stop offset=".6" stop-color="#a78bfa"/><stop offset="1" stop-color="#fb923c"/>
+      </linearGradient></defs>
+    </svg>
+    <b>Wingspan</b><i>Scorekeeper</i>
+  </div>
+  <div class="rail" id="rail"></div>
+  <div class="spacer"></div>
+  <button class="ghost-btn" id="newGameTop" hidden>New game</button>
+</header>
+
+<main id="app"></main>
+<div id="layer"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   Wingspan Scorekeeper — single file, no dependencies, no network, no database.
+   Game state lives in sessionStorage only (cleared when the tab closes).
+   ========================================================================= */
+
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const ICON = {
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  info:  '<svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.2"/></svg>',
+  lock:  '<svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V5h5v2M6.5 7l.8 12.2a1.8 1.8 0 0 0 1.8 1.8h5.8a1.8 1.8 0 0 0 1.8-1.8L18.5 7"/></svg>',
+  warn:  '<svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.7 21.2 19H2.8L12 3.7Z"/><path d="M12 10v4.4M12 17.3v.2"/></svg>',
+  down:  '<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v12M7.5 11l4.5 4.5 4.5-4.5M4 20h16"/></svg>',
+  cam:   '<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5h3.2l1.6-2.3h8.4l1.6 2.3H21v11H3v-11Z"/><circle cx="12" cy="13.8" r="3.4"/></svg>',
+  again: '<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.6h-4.6"/></svg>',
+  arrow: '<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14M13 6.5l5.5 5.5L13 17.5"/></svg>',
+  spark: '<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 14 9l5.8 2-5.8 2-2 5.8-2-5.8L4.2 11 10 9l2-5.8Z"/></svg>',
+  seed:  '<svg viewBox="0 0 24 24"><ellipse cx="8" cy="9" rx="3.6" ry="5" transform="rotate(-28 8 9)"/><ellipse cx="16" cy="10.5" rx="3.4" ry="4.8" transform="rotate(24 16 10.5)"/><ellipse cx="12" cy="17.5" rx="3.5" ry="4.4"/></svg>'
+};
+
+/* ---------------------------------------------------------------- content */
+
+const PLAYER_COLORS = ["#3ee8d0", "#a78bfa", "#fbbf24", "#fb7185", "#a3e635", "#60a5fa", "#fb923c"];
+
+const EXPANSIONS = [
+  { id: "european", name: "European",
+    desc: "New birds, bonus cards and end-of-round goals. Scoring categories are unchanged." },
+  { id: "oceania", name: "Oceania",
+    desc: "Adds nectar. At game end the most and second-most spent nectar in each habitat scores 5 and 2.",
+    adds: "Adds a Nectar round" },
+  { id: "asia", name: "Asia",
+    desc: "New birds, bonus cards and goals. Duet and Flock modes are not included yet." },
+  { id: "americas", name: "Americas",
+    desc: "New birds and bonus cards, scored with the standard categories." }
+];
+
+// Official scoring order from the game's scorepad.
+const BASE_CATS = [
+  { id: "birds",  name: "Birds",             short: "Birds",  color: "#3ee8d0", kind: "simple", unit: "points",
+    rule: "Points on cards",
+    hint: "Add up the points printed in the upper-right corner of every bird card on your player mat." },
+  { id: "bonus",  name: "Bonus Cards",       short: "Bonus",  color: "#a78bfa", kind: "simple", unit: "points",
+    rule: "As qualified",
+    hint: "Reveal your bonus cards and score each one you qualify for. Cards you do not qualify for score nothing." },
+  { id: "goals",  name: "End-of-Round Goals", short: "Goals", color: "#fbbf24", kind: "rounds",
+    rule: "Goal board placement",
+    hint: "Enter the points each player earned on the goal board at the end of each round." },
+  { id: "eggs",   name: "Eggs",              short: "Eggs",   color: "#e7edfb", kind: "simple", unit: "count", per: 1,
+    rule: "1 point each",
+    hint: "1 point per egg sitting on your bird cards." },
+  { id: "food",   name: "Food on Cards",     short: "Food",   color: "#fb7185", kind: "simple", unit: "count", per: 1,
+    rule: "1 point each",
+    hint: "1 point per food token cached on your bird cards." },
+  { id: "tucked", name: "Tucked Cards",      short: "Tucked", color: "#60a5fa", kind: "simple", unit: "count", per: 1,
+    rule: "1 point each",
+    hint: "1 point per card tucked beneath your birds." }
+];
+
+const NECTAR_CAT = {
+  id: "nectar", name: "Nectar", short: "Nectar", color: "#fb923c", kind: "nectar",
+  rule: "5 / 2 per habitat",
+  hint: "Count each player's spent nectar in each habitat. Most scores 5, second-most scores 2 — per habitat."
+};
+
+/* Built-in house rules. Each one is a toggle on the setup screen and is applied
+   wherever its `id` is checked in the scoring logic. */
+const HOUSE_RULES = [
+  { id: "eightRounds", name: "Eight Rounds", short: "8 rounds",
+    desc: "Play 8 rounds instead of 4, dropping a turn each round until you run out. " +
+          "The goals step collects 8 entries rather than 4.",
+    flag: "8 end-of-round goals" }
+];
+
+/* Green-side goal board place points, by round. The 8-round variant repeats the
+   round-4 values (7 / 4 / 3) for every round from 4 onwards. */
+const PLACE_POINTS = [[4, 1, 0], [5, 2, 1], [6, 3, 2], [7, 4, 3]];
+
+function goalRounds() { return S.rules.eightRounds ? 8 : 4; }
+
+function placePointRef() {
+  const n = goalRounds();
+  const out = [];
+  for (let i = 0; i < Math.min(n, 3); i++) out.push(["R" + (i + 1), PLACE_POINTS[i].join(" / ")]);
+  out.push([n > 4 ? "R4&ndash;R" + n : "R4", PLACE_POINTS[3].join(" / ")]);
+  return out;
+}
+
+/* Not a scoring category — it never adds points. It runs as a final step so the
+   reveal can break a tie without ever showing a running total beforehand. */
+const TIEBREAK_CAT = {
+  id: "tiebreak", name: "Leftover Food", short: "Tiebreak", color: "#a3e635", kind: "tiebreak",
+  rule: "Tiebreaker only",
+  hint: "Count the food tokens left in each player's personal supply — not the food cached on bird cards. " +
+        "This never adds to a score; it only decides the winner if totals end up level."
+};
+
+const HABITATS = [
+  { id: "forest",    name: "Forest" },
+  { id: "grassland", name: "Grassland" },
+  { id: "wetland",   name: "Wetland" }
+];
+
+const CUSTOM_COLORS = ["#a3e635", "#22d3ee", "#f472b6", "#facc15", "#818cf8", "#4ade80"];
+
+/* ------------------------------------------------------------------ state */
+
+const KEY = "wingspan-scorekeeper-v1";
+let S = null;
+let uidSeed = 1;
+
+function mkPlayer(i) {
+  return { name: "", color: PLAYER_COLORS[i % PLAYER_COLORS.length] };
+}
+
+function blankState() {
+  return {
+    v: 1,
+    phase: "setup",          // setup | scoring | reveal
+    setupStep: 0,            // 0 expansions, 1 house rules, 2 players
+    expansions: { european: false, oceania: false, asia: false, americas: false },
+    rules: { eightRounds: false },   // built-in house rules
+    custom: [],              // extra house-rule scoring categories
+    playerCount: 2,
+    players: [0, 1, 2, 3, 4].map(mkPlayer),
+    simple: {},              // { catId: { playerIndex: number } }
+    goals:  {},              // { playerIndex: [r1,r2,r3,r4] }
+    nectar: {},              // { playerIndex: { forest, grassland, wetland } }
+    tiebreak: {},            // { playerIndex: leftover food tokens }
+    stepIndex: 0,
+    revealPlayed: false,
+    startedAt: null
+  };
+}
+
+function save() {
+  try { sessionStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* private mode */ }
+}
+function load() {
+  try {
+    const raw = sessionStorage.getItem(KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o || o.v !== 1) return null;
+    o.rules = o.rules || { eightRounds: false };   // forward-compatible defaults
+    o.tiebreak = o.tiebreak || {};
+    return o;
+  } catch (e) { return null; }
+}
+function reset() {
+  try { sessionStorage.removeItem(KEY); } catch (e) {}
+  S = blankState();
+  save();
+}
+
+/* ------------------------------------------------------------- categories */
+
+function categories() {
+  const cats = BASE_CATS.map(c => Object.assign({}, c));
+  if (S.expansions.oceania) cats.push(Object.assign({}, NECTAR_CAT));
+
+  S.custom.forEach((c, i) => {
+    const per = Number(c.per) || 1;
+    const cat = {
+      id: "hr_" + c.uid,
+      name: c.name || "House Rule",
+      short: c.name || "House Rule",
+      color: CUSTOM_COLORS[i % CUSTOM_COLORS.length],
+      kind: "simple",
+      unit: per === 1 ? "points" : "count",
+      per,
+      custom: true,
+      rule: per === 1 ? "Points as entered" : (per + " points per " + (c.unitLabel || "unit")),
+      hint: per === 1
+        ? "House rule category — enter the points each player earned."
+        : ("House rule — " + per + " points per " + (c.unitLabel || "unit") + "."),
+      unitLabel: c.unitLabel || "unit"
+    };
+    let at = cats.length;
+    if (c.after && c.after !== "end") {
+      const f = cats.findIndex(x => x.id === c.after);
+      if (f >= 0) at = f + 1;
+    }
+    cats.splice(at, 0, cat);
+  });
+  return cats;
+}
+
+/** Scoring flow = every scoring category, then the tiebreak step. */
+function scoringSteps() { return categories().concat([TIEBREAK_CAT]); }
+
+function nectarPoints() {
+  const out = S.players.slice(0, S.playerCount).map(() => 0);
+  HABITATS.forEach(h => {
+    const vals = out.map((_, i) => Number((S.nectar[i] || {})[h.id]) || 0);
+    const ranked = Array.from(new Set(vals.filter(v => v > 0))).sort((a, b) => b - a);
+    if (!ranked.length) return;
+    const first = ranked[0];
+    const firstCount = vals.filter(v => v === first).length;
+    vals.forEach((v, i) => { if (v === first) out[i] += 5; });
+    // A tie for most consumes the second-place award as well.
+    if (firstCount === 1 && ranked.length > 1) {
+      const second = ranked[1];
+      vals.forEach((v, i) => { if (v === second) out[i] += 2; });
+    }
+  });
+  return out;
+}
+
+function catScore(cat, i) {
+  if (cat.kind === "nectar") return nectarPoints()[i] || 0;
+  if (cat.kind === "rounds") {
+    // Slice so entries left behind by a longer variant never leak into the total.
+    return (S.goals[i] || []).slice(0, goalRounds()).reduce((a, b) => a + (Number(b) || 0), 0);
+  }
+  const raw = Number((S.simple[cat.id] || {})[i]) || 0;
+  return raw * (cat.per || 1);
+}
+
+function rawInput(cat, i) {
+  if (cat.kind === "nectar") return null;
+  if (cat.kind === "rounds") return (S.goals[i] || []);
+  return Number((S.simple[cat.id] || {})[i]) || 0;
+}
+
+function totalFor(i) {
+  return categories().reduce((sum, c) => sum + catScore(c, i), 0);
+}
+
+function activePlayers() {
+  return S.players.slice(0, S.playerCount).map((p, i) => ({
+    i,
+    name: p.name.trim() || ("Player " + (i + 1)),
+    color: p.color
+  }));
+}
+
+function foodFor(i) { return Number(S.tiebreak[i]) || 0; }
+
+function baseRows() {
+  return activePlayers().map(p => Object.assign({}, p, { total: totalFor(p.i), food: foodFor(p.i) }));
+}
+
+/** Provisional order on points alone — what the chart shows before the tiebreak runs. */
+function standingsByTotal() {
+  const rows = baseRows();
+  rows.sort((a, b) => b.total - a.total || a.i - b.i);
+  return rows;
+}
+
+/** Runs of two or more players level on points, in a list already sorted by total. */
+function tieGroups(rows) {
+  const groups = [];
+  let run = [rows[0]];
+  for (let k = 1; k < rows.length; k++) {
+    if (rows[k].total === run[0].total) run.push(rows[k]);
+    else { if (run.length > 1) groups.push(run); run = [rows[k]]; }
+  }
+  if (run.length > 1) groups.push(run);
+  return groups;
+}
+
+/** Final standings. Ties on points are broken by leftover food; still level is a shared rank. */
+function standings() {
+  const rows = baseRows();
+  rows.sort((a, b) => b.total - a.total || b.food - a.food || a.i - b.i);
+  let rank = 0, prevT = null, prevF = null;
+  rows.forEach((r, idx) => {
+    if (r.total !== prevT || r.food !== prevF) { rank = idx + 1; prevT = r.total; prevF = r.food; }
+    r.rank = rank;
+    // Level on points with someone, but ahead of them on food.
+    r.wonTiebreak = rows.some(o => o !== r && o.total === r.total && o.food < r.food);
+  });
+  return rows;
+}
+
+/** True when the top of the table is shared — level on points *and* on food. */
+function sharedVictory() {
+  const st = standings();
+  return st.length > 1 && st[0].rank === 1 && st[1].rank === 1;
+}
+
+function expansionSummary() {
+  const on = EXPANSIONS.filter(e => S.expansions[e.id]).map(e => e.name);
+  return on.length ? on.join(", ") : "Base game only";
+}
+function houseRuleSummary() {
+  const on = HOUSE_RULES.filter(r => S.rules[r.id]).map(r => r.name)
+    .concat(S.custom.map(c => c.name));
+  return on.length ? on.join(", ") : "None";
+}
+
+/* ------------------------------------------------------------------ toast */
+
+let toastTimer = null;
+function toast(msg) {
+  const t = $("#toast");
+  t.hidden = false;
+  t.innerHTML = ICON.spark + "<span>" + esc(msg) + "</span>";
+  requestAnimationFrame(() => t.classList.add("show"));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    t.classList.remove("show");
+    setTimeout(() => { t.hidden = true; }, 450);
+  }, 2600);
+}
+
+/* ------------------------------------------------------------------ modal */
+
+function dialog(opts) {
+  const layer = $("#layer");
+  layer.innerHTML =
+    '<div class="overlay" data-close="1">' +
+      '<div class="dialog" role="dialog" aria-modal="true">' +
+        '<div class="ic">' + ICON.warn + '</div>' +
+        "<h3>" + esc(opts.title) + "</h3>" +
+        "<p>" + opts.body + "</p>" +
+        '<div class="row">' +
+          '<button class="btn btn-ghost" data-act="cancel">' + esc(opts.cancelText || "Cancel") + "</button>" +
+          '<button class="btn ' + (opts.danger ? "btn-danger" : "btn-primary") + '" data-act="ok">' +
+            esc(opts.okText || "Confirm") + "</button>" +
+        "</div>" +
+      "</div>" +
+    "</div>";
+
+  const close = () => { layer.innerHTML = ""; document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  document.addEventListener("keydown", onKey);
+
+  layer.querySelector('[data-act="cancel"]').onclick = close;
+  layer.querySelector('[data-act="ok"]').onclick = () => { close(); opts.onOk(); };
+  layer.querySelector(".overlay").onclick = e => { if (e.target.dataset.close) close(); };
+  layer.querySelector('[data-act="ok"]').focus();
+}
+
+function confirmNewGame() {
+  dialog({
+    title: "Start a new game?",
+    body: "This game&rsquo;s scores will be <b>permanently lost</b>. Nothing is stored anywhere else, so there is no way to get them back. Download the results first if you want to keep them.",
+    okText: "Yes, wipe it",
+    cancelText: "Keep scoring",
+    danger: true,
+    onOk: () => { reset(); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  });
+}
+
+/* ============================================================================
+   RENDER — root
+   ========================================================================= */
+
+const UNIT_LABEL = { birds: "points", bonus: "points", eggs: "eggs", food: "tokens", tucked: "cards" };
+const SETUP_STEPS = ["Expansions", "House rules", "Players"];
+
+function render() {
+  const app = $("#app");
+  app.onkeydown = null;
+  $("#newGameTop").hidden = (S.phase === "setup" && S.setupStep === 0);
+  renderRail();
+  if (S.phase === "setup") renderSetup(app);
+  else if (S.phase === "scoring") renderScoring(app);
+  else renderReveal(app);
+  save();
+}
+
+function renderRail() {
+  const rail = $("#rail");
+  if (S.phase !== "scoring") { rail.innerHTML = ""; return; }
+  const cats = scoringSteps();
+  rail.innerHTML = cats.map((c, i) =>
+    '<button data-jump="' + i + '" class="' +
+    (i === S.stepIndex ? "on" : (i < S.stepIndex ? "done" : "")) + '">' + esc(c.short) + "</button>"
+  ).join("");
+  rail.onclick = e => {
+    const b = e.target.closest("[data-jump]");
+    if (!b) return;
+    S.stepIndex = Number(b.dataset.jump);
+    render();
+  };
+  const cur = rail.querySelector(".on");
+  if (cur) cur.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+}
+
+function setupRailHTML() {
+  return '<div class="setup-rail">' + SETUP_STEPS.map((label, i) =>
+    (i ? '<span class="bar"></span>' : "") +
+    '<button class="s ' + (i === S.setupStep ? "on" : (i < S.setupStep ? "done" : "")) + '" data-sstep="' + i + '">' +
+      '<span class="n">' + (i < S.setupStep ? "&#10003;" : (i + 1)) + "</span>" + esc(label) +
+    "</button>"
+  ).join("") + "</div>";
+}
+
+/* ============================================================================
+   RENDER — setup
+   ========================================================================= */
+
+function renderSetup(app) {
+  if (S.setupStep === 0) setupExpansions(app);
+  else if (S.setupStep === 1) setupHouseRules(app);
+  else setupPlayers(app);
+
+  const rail = $(".setup-rail", app);
+  if (rail) rail.onclick = e => {
+    const b = e.target.closest("[data-sstep]");
+    if (!b) return;
+    S.setupStep = Number(b.dataset.sstep);
+    render();
+  };
+}
+
+function setupExpansions(app) {
+  app.innerHTML =
+    '<section class="screen">' + setupRailHTML() +
+    '<p class="eyebrow">Setup</p>' +
+    '<h1>What is <span class="accent">on the table</span>?</h1>' +
+    '<p class="sub">Choose every expansion you are mixing in. This decides which scoring rounds show up later — the base game is always included.</p>' +
+    '<div class="cards">' + EXPANSIONS.map(e =>
+      '<button class="tcard ' + (S.expansions[e.id] ? "on" : "") + '" data-exp="' + e.id + '">' +
+        '<div class="tn"><b>' + esc(e.name) + '</b><span class="check">' + ICON.check + "</span></div>" +
+        '<div class="td">' + esc(e.desc) + "</div>" +
+        (e.adds ? '<span class="flag">' + esc(e.adds) + "</span>" : "") +
+      "</button>"
+    ).join("") + "</div>" +
+    '<div class="note">' + ICON.info +
+      "<div>Only <b>Oceania</b> changes the scoring sheet, by adding a nectar round at the end. " +
+      "The other expansions add birds, bonus cards and goal tiles that score through the standard categories.</div></div>" +
+    '<div class="actions">' +
+      '<button class="btn btn-primary" data-go="1">Continue ' + ICON.arrow + "</button>" +
+      '<span class="hintline">' + esc(expansionSummary()) + "</span>" +
+    "</div></section>";
+
+  $(".cards", app).onclick = e => {
+    const b = e.target.closest("[data-exp]");
+    if (!b) return;
+    const id = b.dataset.exp;
+    S.expansions[id] = !S.expansions[id];
+    save();
+    b.classList.toggle("on", S.expansions[id]);
+    $(".hintline", app).textContent = expansionSummary();
+  };
+  $("[data-go]", app).onclick = () => { S.setupStep = 1; render(); };
+}
+
+function setupHouseRules(app) {
+  const cats = categories().filter(c => !c.custom);
+  app.innerHTML =
+    '<section class="screen">' + setupRailHTML() +
+    '<p class="eyebrow">Setup</p>' +
+    '<h1>Any <span class="accent">house rules</span>?</h1>' +
+    '<p class="sub">Turn on the variants your group plays, then add a scoring row for anything ' +
+    'else you score that the official sheet does not.</p>' +
+
+    '<div class="cards" style="margin-bottom:30px">' + HOUSE_RULES.map(r =>
+      '<button class="tcard ' + (S.rules[r.id] ? "on" : "") + '" data-rule="' + r.id + '">' +
+        '<div class="tn"><b>' + esc(r.name) + '</b><span class="check">' + ICON.check + "</span></div>" +
+        '<div class="td">' + esc(r.desc) + "</div>" +
+        (r.flag ? '<span class="flag">' + esc(r.flag) + "</span>" : "") +
+      "</button>"
+    ).join("") + "</div>" +
+
+    '<p class="eyebrow">Custom scoring rows</p>' +
+    '<p class="sub" style="margin-bottom:20px">Anything else your group scores gets its own step ' +
+    'in the flow, in the position you choose.</p>' +
+
+    (S.custom.length
+      ? '<div class="hr-list">' + S.custom.map((c, i) =>
+          '<div class="hr-item">' +
+            '<span class="swatch" style="width:14px;height:14px;margin-top:5px;background:' +
+              CUSTOM_COLORS[i % CUSTOM_COLORS.length] + '"></span>' +
+            '<div class="hb"><b>' + esc(c.name) + "</b><span>" +
+              (Number(c.per) === 1
+                ? "Points entered directly"
+                : esc(c.per + " points per " + (c.unitLabel || "unit"))) +
+              " &middot; scored after " + esc(afterLabel(c.after)) +
+            "</span></div>" +
+            '<button class="hr-del" data-del="' + i + '" title="Remove">' + ICON.trash + "</button>" +
+          "</div>"
+        ).join("") + "</div>"
+      : '<div class="empty-hr">No custom rows &mdash; scoring follows the categories on the official sheet.</div>') +
+
+    '<div class="hr-form">' +
+      '<div class="f2">' +
+        '<div class="field"><label>Category name</label>' +
+          '<input id="hrName" maxlength="28" placeholder="e.g. Nest Majority" autocomplete="off"></div>' +
+        '<div class="field"><label>Scored after</label><select id="hrAfter">' +
+          cats.map(c => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("") +
+          '<option value="end" selected>Everything else (last)</option>' +
+        "</select></div>" +
+      "</div>" +
+      '<div class="f2">' +
+        '<div class="field"><label>Points per unit</label>' +
+          '<input id="hrPer" type="number" min="1" max="99" value="1"></div>' +
+        '<div class="field"><label>Unit name</label>' +
+          '<input id="hrUnit" maxlength="18" value="points" autocomplete="off"></div>' +
+      "</div>" +
+      '<div><button class="btn btn-ghost" id="hrAdd">Add category</button></div>' +
+    "</div>" +
+
+    '<div class="note">' + ICON.info +
+      "<div>Leave <b>points per unit</b> at 1 to type points in straight. Set it higher to count things instead &mdash; " +
+      'e.g. 2 points per tucked card becomes &ldquo;2&rdquo; with a unit name of &ldquo;card&rdquo;, and the app does the multiplication.</div></div>' +
+
+    '<div class="actions">' +
+      '<button class="btn btn-primary" data-go="2">Continue ' + ICON.arrow + "</button>" +
+      '<button class="btn btn-ghost" data-back>Back</button>' +
+    "</div></section>";
+
+  $(".cards", app).onclick = e => {
+    const b = e.target.closest("[data-rule]");
+    if (!b) return;
+    const id = b.dataset.rule;
+    S.rules[id] = !S.rules[id];
+    save();
+    b.classList.toggle("on", S.rules[id]);
+  };
+
+  const list = $(".hr-list", app);
+  if (list) list.onclick = e => {
+    const b = e.target.closest("[data-del]");
+    if (!b) return;
+    S.custom.splice(Number(b.dataset.del), 1);
+    render();
+  };
+
+  $("#hrAdd", app).onclick = () => {
+    const name = $("#hrName", app).value.trim();
+    if (!name) { $("#hrName", app).focus(); toast("Give the category a name first"); return; }
+    S.custom.push({
+      uid: "c" + (uidSeed++) + Date.now().toString(36).slice(-4),
+      name,
+      per: clamp(Number($("#hrPer", app).value) || 1, 1, 99),
+      unitLabel: $("#hrUnit", app).value.trim() || "points",
+      after: $("#hrAfter", app).value
+    });
+    render();
+    toast("Added " + name);
+  };
+  $("#hrName", app).onkeydown = e => { if (e.key === "Enter") $("#hrAdd", app).click(); };
+  $("[data-go]", app).onclick = () => { S.setupStep = 2; render(); };
+  $("[data-back]", app).onclick = () => { S.setupStep = 0; render(); };
+}
+
+function afterLabel(id) {
+  if (!id || id === "end") return "everything else";
+  const c = categories().find(x => x.id === id);
+  return c ? c.name : "everything else";
+}
+
+function setupPlayers(app) {
+  while (S.players.length < 5) S.players.push(mkPlayer(S.players.length));
+
+  app.innerHTML =
+    '<section class="screen">' + setupRailHTML() +
+    '<p class="eyebrow">Setup</p>' +
+    '<h1>Who is <span class="accent">playing</span>?</h1>' +
+    '<p class="sub">Names show up on the scoring sheet and on the final standings. Tap a colour dot to change it.</p>' +
+    '<div class="pills">' + [2, 3, 4, 5].map(n =>
+      '<button class="pill ' + (S.playerCount === n ? "on" : "") + '" data-pc="' + n + '">' + n + " players</button>"
+    ).join("") + "</div>" +
+    '<div class="plist">' + S.players.slice(0, S.playerCount).map((p, i) =>
+      '<div class="prow">' +
+        '<button class="swatch" data-color="' + i + '" style="color:' + p.color + ';background:' + p.color + '" title="Change colour"></button>' +
+        '<input data-name="' + i + '" value="' + esc(p.name) + '" placeholder="Player ' + (i + 1) + '" maxlength="20" autocomplete="off" spellcheck="false">' +
+        '<span class="idx">P' + (i + 1) + "</span>" +
+      "</div>"
+    ).join("") + "</div>" +
+    '<div class="actions">' +
+      '<button class="btn btn-primary" data-start>Begin scoring ' + ICON.arrow + "</button>" +
+      '<button class="btn btn-ghost" data-back>Back</button>' +
+      '<span class="hintline">' + esc(expansionSummary()) + " &middot; " + categories().length + " scoring rounds</span>" +
+    "</div></section>";
+
+  $(".pills", app).onclick = e => {
+    const b = e.target.closest("[data-pc]");
+    if (!b) return;
+    S.playerCount = Number(b.dataset.pc);
+    render();
+  };
+  $(".plist", app).addEventListener("input", e => {
+    const inp = e.target.closest("[data-name]");
+    if (!inp) return;
+    S.players[Number(inp.dataset.name)].name = inp.value;
+    save();
+  });
+  $(".plist", app).addEventListener("click", e => {
+    const b = e.target.closest("[data-color]");
+    if (!b) return;
+    const i = Number(b.dataset.color);
+    const cur = PLAYER_COLORS.indexOf(S.players[i].color);
+    const next = PLAYER_COLORS[(cur + 1) % PLAYER_COLORS.length];
+    S.players[i].color = next;
+    b.style.color = next; b.style.background = next;
+    save();
+  });
+  $("[data-back]", app).onclick = () => { S.setupStep = 1; render(); };
+  $("[data-start]", app).onclick = () => {
+    S.phase = "scoring";
+    S.stepIndex = 0;
+    S.startedAt = Date.now();
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+}
+
+/* ============================================================================
+   RENDER — scoring
+   ========================================================================= */
+
+function renderScoring(app) {
+  const cats = scoringSteps();
+  S.stepIndex = clamp(S.stepIndex, 0, cats.length - 1);
+  const cat = cats[S.stepIndex];
+  const players = activePlayers();
+  const last = S.stepIndex === cats.length - 1;
+
+  let rowsHTML;
+  if (cat.kind === "rounds") {
+    const nR = goalRounds();
+    const stack = nR > 4;
+    rowsHTML = players.map(p => {
+      const cells = '<div class="rgrid">' + Array.from({ length: nR }, (_, r) =>
+        '<div class="rcell"><label>R' + (r + 1) + "</label>" +
+          '<div class="rspin">' +
+            '<input type="number" inputmode="numeric" min="0" max="99" data-r="' + p.i + "|" + r + '" value="' +
+            ((S.goals[p.i] || [])[r] || 0) + '">' +
+            '<span class="rbtns">' +
+              '<button data-rstep="' + p.i + "|" + r + '|1" aria-label="plus">+</button>' +
+              '<button data-rstep="' + p.i + "|" + r + '|-1" aria-label="minus">&minus;</button>' +
+            "</span>" +
+          "</div></div>"
+      ).join("") + "</div>";
+      const sum = '<div class="pts" data-sum="' + p.i + '">= <b>' + catScore(cat, p.i) + "</b> pts</div>";
+      return stack
+        ? '<div class="srow rounds stack">' +
+            '<div class="srow-top">' + pnHTML(p) + sum + "</div>" + cells +
+          "</div>"
+        : '<div class="srow rounds">' + pnHTML(p) + cells + sum + "</div>";
+    }).join("");
+  } else if (cat.kind === "nectar") {
+    const np = nectarPoints();
+    rowsHTML = players.map(p =>
+      '<div class="srow rounds">' + pnHTML(p) +
+        '<div class="rgrid">' + HABITATS.map(h =>
+          '<div class="rcell ncell"><label>' + esc(h.name) + "</label>" +
+            '<div class="rspin">' +
+              '<input type="number" inputmode="numeric" min="0" max="99" data-n="' + p.i + "|" + h.id + '" value="' +
+              ((S.nectar[p.i] || {})[h.id] || 0) + '">' +
+              '<span class="rbtns">' +
+                '<button data-nstep="' + p.i + "|" + h.id + '|1" aria-label="plus">+</button>' +
+                '<button data-nstep="' + p.i + "|" + h.id + '|-1" aria-label="minus">&minus;</button>' +
+              "</span>" +
+            "</div></div>"
+        ).join("") + "</div>" +
+        '<div class="nectar-badge" data-nb="' + p.i + '">' + np[p.i] + " pts</div>" +
+      "</div>"
+    ).join("");
+  } else if (cat.kind === "tiebreak") {
+    rowsHTML = players.map(p =>
+      '<div class="srow">' + pnHTML(p) +
+        '<div class="stepper">' +
+          '<button data-step="' + p.i + '|-1" aria-label="minus">&minus;</button>' +
+          '<input type="number" inputmode="numeric" min="0" max="99" data-v="' + p.i + '" value="' + foodFor(p.i) + '">' +
+          '<button data-step="' + p.i + '|1" aria-label="plus">+</button>' +
+          '<button class="quick" data-step="' + p.i + '|5">+5</button>' +
+          '<button class="quick" data-step="' + p.i + '|10">+10</button>' +
+        "</div>" +
+        '<div class="pts">food</div>' +
+      "</div>"
+    ).join("");
+  } else {
+    const unit = cat.unitLabel || UNIT_LABEL[cat.id] || "points";
+    rowsHTML = players.map(p =>
+      '<div class="srow">' + pnHTML(p) +
+        '<div class="stepper">' +
+          '<button data-step="' + p.i + '|-1" aria-label="minus">&minus;</button>' +
+          '<input type="number" inputmode="numeric" min="0" max="999" data-v="' + p.i + '" value="' + rawInput(cat, p.i) + '">' +
+          '<button data-step="' + p.i + '|1" aria-label="plus">+</button>' +
+          '<button class="quick" data-step="' + p.i + '|5">+5</button>' +
+          '<button class="quick" data-step="' + p.i + '|10">+10</button>' +
+        "</div>" +
+        '<div class="pts" data-sum="' + p.i + '">' +
+          (cat.per && cat.per !== 1 ? "= <b>" + catScore(cat, p.i) + "</b> pts" : esc(unit)) +
+        "</div>" +
+      "</div>"
+    ).join("");
+  }
+
+  app.innerHTML =
+    '<section class="screen">' +
+      '<div class="scorehead">' +
+        '<span class="stepno">Round ' + String(S.stepIndex + 1).padStart(2, "0") +
+          " / " + String(cats.length).padStart(2, "0") + "</span>" +
+        (cat.custom ? '<span class="stepno" style="color:' + cat.color + '">House rule</span>' : "") +
+        (cat.kind === "rounds" && S.rules.eightRounds
+          ? '<span class="stepno" style="color:' + cat.color + '">8-round variant</span>' : "") +
+      "</div>" +
+      "<h1><span class=\"catdot\" style=\"background:" + cat.color +
+        ";box-shadow:0 0 18px " + cat.color + "\"></span>" + esc(cat.name) + "</h1>" +
+      '<p class="sub">' + esc(cat.hint) + "</p>" +
+      (cat.kind === "rounds"
+        ? '<div class="goalref"><span class="grl">Place points</span>' +
+          placePointRef().map(([r, v]) =>
+            '<span class="gr">' + r + " &middot; <b>" + v + "</b></span>").join("") +
+          "</div>"
+        : "") +
+      '<div class="srows">' + rowsHTML + "</div>" +
+      (cat.kind === "nectar"
+        ? '<div class="note">' + ICON.info +
+          "<div>Ties are handled the official way: players tied for the most nectar in a habitat " +
+          "<b>all score 5</b>, and nobody scores the 2. A habitat with no nectar scores nothing.</div></div>"
+        : "") +
+      (cat.kind === "tiebreak"
+        ? '<div class="note">' + ICON.info +
+          "<div>This is asked every game because totals stay hidden until the reveal &mdash; there is no way " +
+          "to know in advance whether it will be needed. If nobody ties, it is simply never used. " +
+          "Leave them at 0 and a tie becomes a <b>shared victory</b>.</div></div>"
+        : "") +
+      '<div class="lockbar">' + ICON.lock + "<span>Totals stay hidden until the reveal.</span></div>" +
+      '<div class="actions">' +
+        '<button class="btn btn-primary" data-next>' +
+          (last ? "See final scores " + ICON.spark : "Next round " + ICON.arrow) + "</button>" +
+        (S.stepIndex > 0 ? '<button class="btn btn-ghost" data-prev>Back</button>' : "") +
+        '<span class="hintline"><kbd>Enter</kbd> to advance</span>' +
+      "</div>" +
+    "</section>";
+
+  wireScoring(app, cat);
+}
+
+function pnHTML(p) {
+  return '<div class="pn"><i class="dot" style="color:' + p.color + ";background:" + p.color +
+    '"></i><span>' + esc(p.name) + "</span></div>";
+}
+
+function wireScoring(app, cat) {
+  const rows = $(".srows", app);
+
+  const setSimple = (i, val) => {
+    if (cat.kind === "tiebreak") { S.tiebreak[i] = val; save(); return; }
+    S.simple[cat.id] = S.simple[cat.id] || {};
+    S.simple[cat.id][i] = val;
+    save();
+    const el = rows.querySelector('[data-sum="' + i + '"]');
+    if (el && cat.per && cat.per !== 1) el.innerHTML = "= <b>" + (val * cat.per) + "</b> pts";
+  };
+
+  rows.addEventListener("input", e => {
+    const t = e.target;
+    if (t.dataset.v !== undefined) {
+      setSimple(Number(t.dataset.v), clamp(Math.floor(Number(t.value) || 0), 0, 999));
+    } else if (t.dataset.r !== undefined) {
+      const [pi, ri] = t.dataset.r.split("|").map(Number);
+      S.goals[pi] = S.goals[pi] || [0, 0, 0, 0];
+      S.goals[pi][ri] = clamp(Math.floor(Number(t.value) || 0), 0, 99);
+      save();
+      const el = rows.querySelector('[data-sum="' + pi + '"]');
+      if (el) el.innerHTML = "= <b>" + catScore(cat, pi) + "</b> pts";
+    } else if (t.dataset.n !== undefined) {
+      const [pi, hid] = t.dataset.n.split("|");
+      S.nectar[pi] = S.nectar[pi] || {};
+      S.nectar[pi][hid] = clamp(Math.floor(Number(t.value) || 0), 0, 99);
+      save();
+      const np = nectarPoints();
+      $$("[data-nb]", rows).forEach(b => { b.textContent = (np[Number(b.dataset.nb)] || 0) + " pts"; });
+    }
+  });
+
+  rows.addEventListener("blur", e => {
+    if (e.target.tagName === "INPUT" && e.target.value === "") e.target.value = "0";
+  }, true);
+
+  // Grid spinners reuse the input handler above by re-dispatching, so the state
+  // and derived displays stay in exactly one place.
+  const bump = (inp, d, max) => {
+    inp.value = clamp((Number(inp.value) || 0) + d, 0, max);
+    inp.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  rows.addEventListener("click", e => {
+    const b = e.target.closest("[data-step]");
+    if (b) {
+      const [i, d] = b.dataset.step.split("|").map(Number);
+      const inp = rows.querySelector('[data-v="' + i + '"]');
+      const val = clamp((Number(inp.value) || 0) + d, 0, cat.kind === "tiebreak" ? 99 : 999);
+      inp.value = val;
+      setSimple(i, val);
+      return;
+    }
+    const rb = e.target.closest("[data-rstep]");
+    if (rb) {
+      const parts = rb.dataset.rstep.split("|");
+      bump(rows.querySelector('[data-r="' + parts[0] + "|" + parts[1] + '"]'), Number(parts[2]), 99);
+      return;
+    }
+    const nb = e.target.closest("[data-nstep]");
+    if (nb) {
+      const parts = nb.dataset.nstep.split("|");
+      bump(rows.querySelector('[data-n="' + parts[0] + "|" + parts[1] + '"]'), Number(parts[2]), 99);
+    }
+  });
+
+  const cats = scoringSteps();
+  const go = d => {
+    const n = S.stepIndex + d;
+    if (n < 0) return;
+    if (n >= cats.length) { startReveal(); return; }
+    S.stepIndex = n;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  $("[data-next]", app).onclick = () => go(1);
+  const prev = $("[data-prev]", app);
+  if (prev) prev.onclick = () => go(-1);
+
+  app.onkeydown = e => {
+    if (e.key === "Enter") { e.preventDefault(); go(1); }
+  };
+
+  const first = rows.querySelector("input");
+  if (first && matchMedia("(pointer:fine)").matches) { first.focus(); first.select(); }
+}
+
+function startReveal() {
+  S.phase = "reveal";
+  S.revealPlayed = false;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* ============================================================================
+   RENDER — reveal
+   ========================================================================= */
+
+let revealTimers = [];
+let revealRAF = null;
+
+function stopReveal() {
+  revealTimers.forEach(clearTimeout);
+  revealTimers = [];
+  if (revealRAF) cancelAnimationFrame(revealRAF);
+  revealRAF = null;
+  // a replay can start while the last run's confetti is still falling
+  $$("#confetti").forEach(c => c.remove());
+}
+
+function renderReveal(app) {
+  stopReveal();
+
+  const cats    = categories();
+  const players = activePlayers();
+  const seg     = players.map(p => cats.map(c => catScore(c, p.i)));
+  const totals  = seg.map(a => a.reduce((x, y) => x + y, 0));
+  const scaleMax = Math.max(1, Math.max.apply(null, totals)) * 1.04;
+
+  app.innerHTML =
+    '<section class="screen reveal-wrap">' +
+      '<p class="eyebrow">The reveal</p>' +
+      '<div class="cat-head" id="catHead"><span class="ch-dot"></span>' +
+        '<span class="ch-txt"><b id="chName">Tallying</b><i id="chRule">Stand by</i></span></div>' +
+
+      '<div class="chart" id="chart">' + players.map(p =>
+        '<div class="crow" data-p="' + p.i + '">' +
+          '<div class="cname"><span class="rank" data-rank="' + p.i + '"></span>' +
+            '<i class="dot" style="color:' + p.color + ";background:" + p.color + '"></i>' +
+            "<span>" + esc(p.name) + "</span></div>" +
+          '<div class="track"><div class="segs">' + cats.map(c =>
+            '<div class="seg" data-seg="' + p.i + "|" + c.id + '" style="background:' + c.color + '"></div>'
+          ).join("") + "</div>" +
+            '<div class="ticks" data-ticks></div>' +
+            '<span class="head" data-head="' + p.i + '" style="color:' + p.color + ";background:" + p.color + '"></span>' +
+            '<span class="add" data-add="' + p.i + '" style="color:' + p.color + '"></span>' +
+          "</div>" +
+          '<div class="tail-col">' +
+            '<div class="insp" data-insp="' + p.i + '"></div>' +
+            '<div class="ctotal" data-tot="' + p.i + '">0</div>' +
+            '<span class="tiebadge" data-tb="' + p.i + '">' + ICON.seed + '<span>0</span></span>' +
+          "</div>" +
+        "</div>"
+      ).join("") + "</div>" +
+
+      '<div class="legend" id="legend">' + cats.map(c =>
+        '<button class="lg" data-lg="' + c.id + '"><i style="background:' + c.color + '"></i>' + esc(c.short) + "</button>"
+      ).join("") + "</div>" +
+      '<p class="insp-hint" id="inspHint" hidden></p>' +
+
+      '<button class="skip" id="skipBtn">Skip animation</button>' +
+      '<button class="skip replay" id="replayBtn" hidden>' + ICON.again + "Replay the reveal</button>" +
+
+      '<div class="results-tail" id="tail">' +
+        podiumHTML() +
+        '<p class="eyebrow" style="margin-top:6px">Score breakdown</p>' +
+        tableHTML() +
+        '<div class="actions">' +
+          '<button class="btn btn-primary" id="dlCsv">' + ICON.down + "Download results</button>" +
+          '<button class="btn btn-ghost" id="dlPng">' + ICON.cam + "Capture podium</button>" +
+          '<button class="btn btn-danger" id="newGameBtn">' + ICON.again + "Play new game</button>" +
+        "</div>" +
+        '<div class="lockbar" style="margin-top:20px">' + ICON.lock +
+          "<span>Nothing is uploaded or stored &mdash; this game lives in this browser tab only.</span></div>" +
+      "</div>" +
+    "</section>";
+
+  const rowEls = {}, totEls = {}, rankEls = {}, headEls = {}, addEls = {};
+  players.forEach(p => {
+    rowEls[p.i]  = app.querySelector('.crow[data-p="' + p.i + '"]');
+    totEls[p.i]  = app.querySelector('[data-tot="' + p.i + '"]');
+    rankEls[p.i] = app.querySelector('[data-rank="' + p.i + '"]');
+    headEls[p.i] = app.querySelector('[data-head="' + p.i + '"]');
+    addEls[p.i]  = app.querySelector('[data-add="' + p.i + '"]');
+  });
+  const segEls = players.map((p, pi) => cats.map(c => app.querySelector('[data-seg="' + p.i + "|" + c.id + '"]')));
+
+  // One faint division per point, but only while a point is wide enough to read.
+  const RATE  = 5;     // points per second — every bar advances at this same rate
+  const HOLD  = 1000;  // pause at the end of each category
+  const EMPTY = 450;   // how long to show a category nobody scored in
+
+  const trackW = app.querySelector(".track").clientWidth || 520;
+  const pointW = trackW / scaleMax;
+  if (pointW >= 3.5) {
+    const g = "repeating-linear-gradient(90deg,transparent 0," +
+      "transparent " + (pointW - 1).toFixed(2) + "px," +
+      "rgba(0,0,0,.30) " + (pointW - 1).toFixed(2) + "px," +
+      "rgba(0,0,0,.30) " + pointW.toFixed(2) + "px)";
+    $$("[data-ticks]", app).forEach(t => { t.style.backgroundImage = g; });
+  }
+
+  function setCatHead(cat) {
+    const h = $("#catHead", app);
+    $("#chName", app).textContent = cat ? cat.name : "Final scores";
+    $("#chRule", app).textContent = cat ? (cat.rule || "") : "All categories counted";
+    const col = cat ? cat.color : "#fbbf24";
+    h.querySelector(".ch-dot").style.background = col;
+    h.querySelector(".ch-dot").style.boxShadow = "0 0 16px " + col;
+    h.style.borderColor = cat ? col + "66" : "rgba(251,191,36,.5)";
+    h.style.boxShadow = "0 0 34px -12px " + col;
+  }
+
+  /** Park the travelling marker and its +N chip at `frac` along the track. */
+  function setHead(pi, frac, add, visible) {
+    const pct = clamp(frac, 0, 1) * 100;
+    const h = headEls[players[pi].i], a = addEls[players[pi].i];
+    h.style.left = pct + "%";
+    h.style.opacity = visible ? "1" : "0";
+    a.style.left = pct + "%";
+    a.textContent = "+" + add;
+    // Flip the chip back over the bar once the marker nears the right edge.
+    a.style.transform = frac > 0.72
+      ? "translate(calc(-100% - 14px),-50%)"
+      : "translate(14px,-50%)";
+    a.style.opacity = visible ? "1" : "0";
+  }
+  function hideHeads() {
+    players.forEach(p => { headEls[p.i].style.opacity = "0"; addEls[p.i].style.opacity = "0"; });
+  }
+
+  function markLead() {
+    let best = -1, leaders = [];
+    players.forEach(p => {
+      const v = Number(totEls[p.i].textContent) || 0;
+      if (v > best) { best = v; leaders = [p.i]; }
+      else if (v === best) leaders.push(p.i);
+    });
+    players.forEach(p => rowEls[p.i].classList.toggle("lead", best > 0 && leaders.indexOf(p.i) >= 0));
+  }
+
+  /** FLIP the chart rows into the given order. */
+  function reorderTo(order) {
+    const chart = $("#chart", app);
+    const rows = $$(".crow", chart);
+    const before = new Map(rows.map(r => [r, r.getBoundingClientRect().top]));
+    order.forEach(r => chart.appendChild(rowEls[r.i]));
+    rows.forEach(r => {
+      const d = before.get(r) - r.getBoundingClientRect().top;
+      r.style.transition = "none";
+      r.style.transform = d ? "translateY(" + d + "px)" : "";
+    });
+    void chart.offsetHeight;
+    requestAnimationFrame(() => {
+      rows.forEach(r => {
+        r.style.transition = "transform .8s cubic-bezier(.16,1,.3,1)";
+        r.style.transform = "";
+      });
+    });
+  }
+
+  /* ---- inspect: pull one category out of the finished stack ---- */
+  let inspect = null;      // catId currently singled out
+  let inspectable = false; // only once the reveal has landed
+  let finalHead = null;    // header text to restore when clearing
+
+  function applyInspect() {
+    const c = inspect ? cats.find(x => x.id === inspect) : null;
+    $("#chart", app).classList.toggle("inspecting", !!c);
+
+    players.forEach((p, pi) => {
+      cats.forEach((cc, ci) => segEls[pi][ci].classList.toggle("lit", !!c && cc.id === c.id));
+      const box = app.querySelector('[data-insp="' + p.i + '"]');
+      if (c) {
+        box.textContent = catScore(c, p.i);
+        box.style.color = c.color;
+        box.classList.add("on");
+      } else {
+        box.classList.remove("on");
+      }
+    });
+
+    $$(".lg", app).forEach(l => {
+      const sel = !!c && l.dataset.lg === c.id;
+      l.classList.toggle("sel", sel);
+      l.style.background = sel ? c.color : "";
+      l.style.borderColor = sel ? c.color : "";
+      l.style.color = sel ? "var(--bg)" : "";
+    });
+
+    const hint = $("#inspHint", app);
+    if (c) {
+      setCatHead(c);
+      hint.innerHTML = "Showing <b>" + esc(c.name) + "</b> &middot; tap it again for totals";
+    } else {
+      setCatHead(null);
+      if (finalHead) {
+        $("#chName", app).textContent = finalHead.n;
+        $("#chRule", app).textContent = finalHead.r;
+      }
+      hint.innerHTML = "Tap a category to see everyone&rsquo;s points for it";
+    }
+  }
+
+  $("#legend", app).onclick = e => {
+    const b = e.target.closest("[data-lg]");
+    if (!b || !inspectable) return;
+    inspect = (inspect === b.dataset.lg) ? null : b.dataset.lg;
+    applyInspect();
+  };
+
+  function enableInspect() {
+    inspectable = true;
+    finalHead = { n: $("#chName", app).textContent, r: $("#chRule", app).textContent };
+    $$(".lg", app).forEach(l => l.classList.add("clickable"));
+    const hint = $("#inspHint", app);
+    hint.hidden = false;
+    hint.innerHTML = "Tap a category to see everyone&rsquo;s points for it";
+  }
+
+  function setBadge(i, value, on) {
+    const b = app.querySelector('[data-tb="' + i + '"]');
+    b.querySelector("span").textContent = value;
+    b.classList.toggle("on", !!on);
+  }
+
+  /** Freeze the bars at their final widths and clear the running-tally chrome. */
+  function freezeBars() {
+    players.forEach((p, pi) => {
+      cats.forEach((c, ci) => { segEls[pi][ci].style.width = (seg[pi][ci] / scaleMax * 100) + "%"; });
+      totEls[p.i].textContent = totals[pi];
+      rowEls[p.i].classList.remove("lead");
+    });
+    hideHeads();
+    $$(".lg", app).forEach(l => l.classList.remove("hot"));
+    const sk = $("#skipBtn", app);
+    if (sk) sk.remove();
+    const rp = $("#replayBtn", app);
+    if (rp) rp.hidden = false;
+  }
+
+  /** Land on the final order, crown the winner and bring in the podium. */
+  function finishOrder(withConfetti) {
+    const st = standings();
+    const shared = sharedVictory();
+    setCatHead(null);
+    if (shared) {
+      $("#chName", app).textContent = "Shared Victory";
+      $("#chRule", app).textContent = "Level on points and on food";
+    }
+    reorderTo(st);
+    st.forEach(r => {
+      rankEls[r.i].textContent = r.rank;
+      rankEls[r.i].style.opacity = ".75";
+      rowEls[r.i].classList.remove("dim", "tiefocus");
+      rowEls[r.i].classList.toggle("win", r.rank === 1);
+      rowEls[r.i].classList.toggle("tiewin", !!r.wonTiebreak);
+    });
+    $("#tail", app).classList.add("show");
+    enableInspect();
+    if (withConfetti) confetti();
+    S.revealPlayed = true;
+    save();
+  }
+
+  /** The tiebreak beat: dim everyone else, count the tied players' food up, then re-sort. */
+  function runTiebreak(groups, withConfetti) {
+    const tied = groups.reduce((a, g) => a.concat(g), []);
+    const isTied = i => tied.some(t => t.i === i);
+
+    $("#chName", app).textContent = "Tiebreak";
+    $("#chRule", app).textContent = "Most food left over";
+    const h = $("#catHead", app);
+    h.querySelector(".ch-dot").style.background = "#a3e635";
+    h.querySelector(".ch-dot").style.boxShadow = "0 0 16px #a3e635";
+    h.style.borderColor = "rgba(163,230,53,.5)";
+    h.style.boxShadow = "0 0 34px -12px #a3e635";
+
+    players.forEach(p => {
+      rowEls[p.i].classList.toggle("dim", !isTied(p.i));
+      rowEls[p.i].classList.toggle("tiefocus", isTied(p.i));
+    });
+    tied.forEach(t => setBadge(t.i, 0, true));
+
+    const peak = Math.max.apply(null, tied.map(t => t.food));
+    const dur = peak > 0 ? Math.max(700, (peak / RATE) * 1000) : 600;
+    const t0 = performance.now();
+
+    (function frame(now) {
+      const t = clamp((now - t0) / dur, 0, 1);
+      tied.forEach(r => setBadge(r.i, Math.round(Math.min(r.food, peak * t)), true));
+      if (t < 1) { revealRAF = requestAnimationFrame(frame); return; }
+      tied.forEach(r => setBadge(r.i, r.food, true));
+      revealTimers.push(setTimeout(() => finishOrder(withConfetti), 1100));
+    })(performance.now());
+  }
+
+  /**
+   * End of the reveal. With `animate` the tiebreak plays as its own beat; without it
+   * (skip, or a page refresh after the reveal) everything lands in its final state.
+   */
+  function settle(withConfetti, animate) {
+    freezeBars();
+    const byTotal = standingsByTotal();
+    const groups = tieGroups(byTotal);
+    groups.reduce((a, g) => a.concat(g), []).forEach(r => setBadge(r.i, r.food, true));
+
+    if (!groups.length || animate === false) { finishOrder(withConfetti); return; }
+
+    setCatHead(null);
+    reorderTo(byTotal);
+    byTotal.forEach((r, idx) => {
+      rankEls[r.i].textContent = idx + 1;
+      rankEls[r.i].style.opacity = ".4";
+    });
+    groups.reduce((a, g) => a.concat(g), []).forEach(r => setBadge(r.i, 0, true));
+    revealTimers.push(setTimeout(() => runTiebreak(groups, withConfetti), 1000));
+  }
+
+  wireResultActions(app);
+
+  // Clearing the played flag and re-rendering runs the whole sequence again,
+  // tiebreak included, from a clean slate.
+  $("#replayBtn", app).onclick = () => {
+    S.revealPlayed = false;
+    save();
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (S.revealPlayed) { settle(false, false); return; }
+
+  /* ---- the suspenseful part ----
+     Every bar advances at the same constant rate, so a player with more points in
+     a category simply keeps moving after the others have stopped. Each category
+     then holds for a beat before the next one starts. */
+  let ci = 0;
+  const running = players.map(() => 0);
+
+  function stepCat() {
+    if (ci >= cats.length) {
+      revealTimers.push(setTimeout(() => settle(true, true), 600));
+      return;
+    }
+    const cat = cats[ci], idx = ci;
+    setCatHead(cat);
+    $$(".lg", app).forEach(l => l.classList.toggle("hot", l.dataset.lg === cat.id));
+
+    const peak = Math.max.apply(null, players.map((p, pi) => seg[pi][idx]));
+    const dur  = peak > 0 ? (peak / RATE) * 1000 : EMPTY;
+
+    players.forEach((p, pi) => setHead(pi, running[pi] / scaleMax, 0, seg[pi][idx] > 0));
+
+    const t0 = performance.now();
+    (function frame(now) {
+      const t = clamp((now - t0) / dur, 0, 1);
+      const front = peak * t;                       // points released so far this category
+      players.forEach((p, pi) => {
+        const v = seg[pi][idx];
+        const got = Math.min(v, front);             // each player stops at their own value
+        segEls[pi][idx].style.width = (got / scaleMax * 100) + "%";
+        totEls[p.i].textContent = Math.round(running[pi] + got);
+        setHead(pi, (running[pi] + got) / scaleMax, Math.round(got), v > 0);
+      });
+      markLead();
+      if (t < 1) { revealRAF = requestAnimationFrame(frame); return; }
+
+      players.forEach((p, pi) => {
+        running[pi] += seg[pi][idx];
+        totEls[p.i].textContent = running[pi];
+        setHead(pi, running[pi] / scaleMax, seg[pi][idx], seg[pi][idx] > 0);
+      });
+      ci++;
+      revealTimers.push(setTimeout(stepCat, HOLD));
+    })(performance.now());
+  }
+
+  revealTimers.push(setTimeout(stepCat, 700));
+
+  $("#skipBtn", app).onclick = () => { stopReveal(); settle(true, false); };
+}
+
+function podiumHTML() {
+  const st = standings().slice(0, 3);
+  const order = st.length >= 3 ? [st[1], st[0], st[2]] : [st[1], st[0]];
+  return '<div class="podium">' + order.filter(Boolean).map(r => {
+    const cls = r.rank === 1 ? "p1" : (r.rank === 2 ? "p2" : "p3");
+    return '<div class="ped ' + cls + '">' +
+      (r.rank === 1 ? '<div class="crown">&#128081;</div>' : "") +
+      '<div class="who"><div class="nm" style="color:' + r.color + '">' + esc(r.name) + "</div>" +
+        '<div class="sc">' + r.total + "<small>PTS</small></div></div>" +
+      '<div class="block"><span class="pl">' + r.rank + "</span></div>" +
+    "</div>";
+  }).join("") + "</div>";
+}
+
+function tableHTML() {
+  const cats = categories(), st = standings();
+  // The food column only earns its place when a tie actually happened.
+  const showFood = tieGroups(standingsByTotal()).length > 0;
+  const ncols = cats.length + (showFood ? 1 : 0);
+  return '<div class="table-scroll"><div class="table" style="--ncols:' + ncols + '">' +
+    '<div class="th"><span>#</span><span>Player</span>' +
+      cats.map(c => '<span style="text-align:center">' + esc(c.short) + "</span>").join("") +
+      (showFood ? '<span style="text-align:center">Leftover</span>' : "") +
+      '<span style="text-align:right">Total</span></div>' +
+    st.map(r =>
+      '<div class="tr ' + (r.rank === 1 ? "first" : "") + '">' +
+        '<span class="rk">' + r.rank + "</span>" +
+        '<span class="nm"><i style="background:' + r.color + '"></i><span>' + esc(r.name) + "</span></span>" +
+        cats.map(c => { const v = catScore(c, r.i); return '<span class="v ' + (v ? "" : "z") + '">' + v + "</span>"; }).join("") +
+        (showFood
+          ? '<span class="v" style="color:' + (r.wonTiebreak ? "#a3e635" : "") + '">' + r.food + "</span>"
+          : "") +
+        '<span class="tt">' + r.total + "</span>" +
+      "</div>"
+    ).join("") +
+  "</div></div>" +
+  (showFood
+    ? '<p class="hintline" style="margin-top:12px">' +
+      (sharedVictory()
+        ? "Level on points and on leftover food &mdash; a shared victory."
+        : "Level on points, so leftover food decided it.") + "</p>"
+    : "");
+}
+
+function wireResultActions(app) {
+  $("#dlCsv", app).onclick = exportCSV;
+  $("#dlPng", app).onclick = exportPNG;
+  $("#newGameBtn", app).onclick = confirmNewGame;
+}
+
+/* ------------------------------------------------------------- confetti */
+
+function confetti() {
+  if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  const cv = document.createElement("canvas");
+  cv.id = "confetti";
+  document.body.appendChild(cv);
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.width = innerWidth * dpr, h = cv.height = innerHeight * dpr;
+  cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px";
+  const ctx = cv.getContext("2d");
+  const colors = ["#3ee8d0", "#a78bfa", "#fbbf24", "#fb7185", "#a3e635", "#ffffff"];
+  const P = [];
+  for (let i = 0; i < 150; i++) {
+    P.push({
+      x: w * (0.5 + (Math.random() - 0.5) * 0.55),
+      y: h * 0.40,
+      vx: (Math.random() - 0.5) * 16 * dpr,
+      vy: (-Math.random() * 17 - 4) * dpr,
+      s: (4 + Math.random() * 7) * dpr,
+      r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.34,
+      c: colors[i % colors.length], life: 1
+    });
+  }
+  let last = performance.now();
+  (function loop(now) {
+    const dt = Math.min(34, now - last) / 16.7; last = now;
+    ctx.clearRect(0, 0, w, h);
+    let alive = false;
+    for (const p of P) {
+      if (p.life <= 0) continue;
+      p.vy += 0.44 * dpr * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      p.r += p.vr * dt; p.life -= 0.0072 * dt;
+      if (p.y > h + 50) { p.life = 0; continue; }
+      alive = true;
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.r);
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.62);
+      ctx.restore();
+    }
+    if (alive) requestAnimationFrame(loop); else cv.remove();
+  })(last);
+}
+
+/* ============================================================================
+   EXPORT
+   ========================================================================= */
+
+function stamp() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes());
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function csvCell(v) {
+  v = String(v);
+  return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+
+function exportCSV() {
+  const cats = categories(), st = standings();
+  const L = [];
+  L.push(["Wingspan Scorekeeper"].map(csvCell).join(","));
+  L.push(["Date", new Date().toLocaleString()].map(csvCell).join(","));
+  L.push(["Expansions", expansionSummary()].map(csvCell).join(","));
+  L.push(["House rules", houseRuleSummary()].map(csvCell).join(","));
+  L.push(["Players", S.playerCount].map(csvCell).join(","));
+  L.push("");
+  L.push(["Rank", "Player"].concat(cats.map(c => c.name),
+    ["Total", "Leftover food (tiebreak)", "Won on tiebreak"]).map(csvCell).join(","));
+  st.forEach(r => {
+    L.push([r.rank, r.name].concat(cats.map(c => catScore(c, r.i)),
+      [r.total, r.food, r.wonTiebreak ? "yes" : ""]).map(csvCell).join(","));
+  });
+  downloadBlob(new Blob(["﻿" + L.join("\r\n")], { type: "text/csv;charset=utf-8" }),
+               "wingspan-" + stamp() + ".csv");
+  toast("Results downloaded");
+}
+
+/* ---- podium poster ---- */
+
+function rr(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function trackedWidth(ctx, text, sp) {
+  let w = 0;
+  for (const ch of text) w += ctx.measureText(ch).width + sp;
+  return w - sp;
+}
+function tracked(ctx, text, x, y, sp) {
+  let cx = x;
+  for (const ch of text) { ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width + sp; }
+}
+
+const FONT = 'ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
+
+function exportPNG() {
+  const cats = categories(), st = standings();
+  const DPR = 2, W = 1400, PAD = 72;
+  const podTop = 210, podBase = 600;
+  const listTop = podBase + 110;
+  const rowH = 54;
+  const legendTop = listTop + 34 + st.length * rowH + 42;
+  const H = legendTop + 96;
+
+  const cv = document.createElement("canvas");
+  cv.width = W * DPR; cv.height = H * DPR;
+  const ctx = cv.getContext("2d");
+  ctx.scale(DPR, DPR);
+  ctx.textBaseline = "alphabetic";
+
+  /* background */
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, "#05070e"); bg.addColorStop(0.55, "#0a1020"); bg.addColorStop(1, "#070a14");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  [["#3ee8d0", 120, 40, 460, 0.16], ["#a78bfa", W - 140, 10, 440, 0.15], ["#fb923c", W * 0.55, H - 60, 520, 0.09]]
+    .forEach(([c, x, y, r, a]) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, c); g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha = a; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+    });
+
+  /* header */
+  ctx.fillStyle = "#3ee8d0";
+  ctx.font = "650 13px " + FONT;
+  tracked(ctx, "WINGSPAN SCOREKEEPER", PAD, 64, 5.5);
+  ctx.fillStyle = "#e9eef8";
+  ctx.font = "700 48px " + FONT;
+  ctx.fillText("Final Standings", PAD, 120);
+  ctx.fillStyle = "#8d99b2";
+  ctx.font = "400 16px " + FONT;
+  ctx.fillText(new Date().toLocaleString() + "   ·   " + expansionSummary() +
+               "   ·   " + S.playerCount + " players", PAD, 150);
+  if (S.custom.length) {
+    ctx.fillStyle = "#5b667e";
+    ctx.font = "400 14px " + FONT;
+    ctx.fillText("House rules: " + houseRuleSummary(), PAD, 174);
+  }
+  ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, 192); ctx.lineTo(W - PAD, 192); ctx.stroke();
+
+  /* podium */
+  const top3 = st.slice(0, 3);
+  const order = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : [top3[1], top3[0]];
+  const peds = order.filter(Boolean);
+  const pw = 250, gap = 34;
+  const totalW = peds.length * pw + (peds.length - 1) * gap;
+  let px = (W - totalW) / 2;
+  const HGT = { 1: 205, 2: 148, 3: 108 };
+  const TINT = { 1: [251, 191, 36], 2: [226, 232, 240], 3: [251, 146, 60] };
+
+  peds.forEach(r => {
+    const h = HGT[r.rank] || 90;
+    const tint = TINT[r.rank] || [148, 163, 184];
+    const y = podBase - h;
+
+    const g = ctx.createLinearGradient(0, y, 0, podBase);
+    g.addColorStop(0, "rgba(" + tint.join(",") + ",.62)");
+    g.addColorStop(.55, "rgba(" + tint.join(",") + ",.22)");
+    g.addColorStop(1, "rgba(" + tint.join(",") + ",.04)");
+    ctx.fillStyle = g;
+    rr(ctx, px, y, pw, h, 16); ctx.fill();
+    ctx.strokeStyle = "rgba(" + tint.join(",") + ",.7)"; ctx.lineWidth = 1.4;
+    rr(ctx, px + 0.7, y + 0.7, pw - 1.4, h - 1.4, 15); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.35)";
+    ctx.fillRect(px + 16, y + 1.5, pw - 32, 1.2);
+
+    ctx.fillStyle = "rgba(255,255,255,.14)";
+    ctx.font = "800 44px " + FONT; ctx.textAlign = "center";
+    ctx.fillText(String(r.rank), px + pw / 2, y + h / 2 + 16);
+
+    ctx.fillStyle = r.color;
+    ctx.font = "650 20px " + FONT;
+    let nm = r.name;
+    while (ctx.measureText(nm).width > pw - 18 && nm.length > 3) nm = nm.slice(0, -1);
+    if (nm !== r.name) nm = nm.slice(0, -1) + "…";
+    ctx.fillText(nm, px + pw / 2, y - 46);
+
+    ctx.fillStyle = "#e9eef8";
+    ctx.font = "750 40px " + FONT;
+    const sTxt = String(r.total);
+    const sW = ctx.measureText(sTxt).width;
+    ctx.textAlign = "left";
+    ctx.fillText(sTxt, px + pw / 2 - (sW + 34) / 2, y - 12);
+    ctx.fillStyle = "#5b667e"; ctx.font = "650 12px " + FONT;
+    tracked(ctx, "PTS", px + pw / 2 - (sW + 34) / 2 + sW + 8, y - 12, 1.5);
+    ctx.textAlign = "center";
+
+    if (r.rank === 1) {
+      ctx.font = "30px " + FONT;
+      ctx.fillText("👑", px + pw / 2, y - 84);
+    }
+    if (r.wonTiebreak) {
+      ctx.fillStyle = "#a3e635";
+      ctx.font = "650 11px " + FONT;
+      const lbl = "TIEBREAK · " + r.food + " FOOD";
+      tracked(ctx, lbl, px + pw / 2 - trackedWidth(ctx, lbl, 2) / 2, podBase + 26, 2);
+    }
+    px += pw + gap;
+  });
+  ctx.textAlign = "left";
+
+  if (sharedVictory()) {
+    ctx.fillStyle = "#a3e635";
+    ctx.font = "650 12px " + FONT;
+    const lbl = "SHARED VICTORY · LEVEL ON POINTS AND FOOD";
+    tracked(ctx, lbl, W / 2 - trackedWidth(ctx, lbl, 3) / 2, podBase + 26, 3);
+  }
+
+  /* breakdown list */
+  ctx.fillStyle = "#5b667e"; ctx.font = "650 12px " + FONT;
+  tracked(ctx, "SCORE BREAKDOWN", PAD, listTop, 4.5);
+
+  const barX = 380, barW = W - PAD - 120 - barX, barH = 28;
+  const maxTotal = Math.max(1, st[0] ? st[0].total : 1);
+  st.forEach((r, i) => {
+    const y = listTop + 34 + i * rowH;
+    const cy = y + barH / 2;
+
+    ctx.fillStyle = r.rank === 1 ? "#fbbf24" : "#5b667e";
+    ctx.font = "700 15px " + FONT;
+    ctx.fillText(String(r.rank), PAD, cy + 5);
+
+    ctx.fillStyle = r.color;
+    ctx.beginPath(); ctx.arc(PAD + 34, cy, 5.5, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = "#e9eef8"; ctx.font = "600 17px " + FONT;
+    let nm = r.name;
+    while (ctx.measureText(nm).width > barX - PAD - 70 && nm.length > 3) nm = nm.slice(0, -1);
+    if (nm !== r.name) nm += "…";
+    ctx.fillText(nm, PAD + 50, cy + 6);
+
+    ctx.fillStyle = "rgba(255,255,255,.05)";
+    rr(ctx, barX, y, barW, barH, 9); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.09)"; ctx.lineWidth = 1;
+    rr(ctx, barX + .5, y + .5, barW - 1, barH - 1, 9); ctx.stroke();
+
+    ctx.save();
+    rr(ctx, barX, y, barW, barH, 9); ctx.clip();
+    let cx = barX;
+    cats.forEach(c => {
+      const v = catScore(c, r.i);
+      if (v <= 0) return;
+      const w = v / maxTotal * barW;
+      ctx.fillStyle = c.color;
+      ctx.fillRect(cx, y, w, barH);
+      ctx.fillStyle = "rgba(255,255,255,.18)";
+      ctx.fillRect(cx, y, w, 1.5);
+      cx += w;
+    });
+    ctx.restore();
+
+    ctx.fillStyle = r.rank === 1 ? "#fbbf24" : "#e9eef8";
+    ctx.font = "750 22px " + FONT; ctx.textAlign = "right";
+    ctx.fillText(String(r.total), W - PAD, cy + 8);
+    ctx.textAlign = "left";
+  });
+
+  /* legend */
+  ctx.fillStyle = "#5b667e"; ctx.font = "650 12px " + FONT;
+  tracked(ctx, "CATEGORIES", PAD, legendTop, 4.5);
+  let lx = PAD, ly = legendTop + 28;
+  ctx.font = "500 14px " + FONT;
+  cats.forEach(c => {
+    const label = c.short;
+    const w = 16 + ctx.measureText(label).width + 22;
+    if (lx + w > W - PAD) { lx = PAD; ly += 26; }
+    ctx.fillStyle = c.color;
+    rr(ctx, lx, ly - 9, 10, 10, 3); ctx.fill();
+    ctx.fillStyle = "#8d99b2";
+    ctx.fillText(label, lx + 16, ly);
+    lx += w;
+  });
+
+  ctx.fillStyle = "#3b4356"; ctx.font = "400 12px " + FONT;
+  ctx.textAlign = "right";
+  ctx.fillText("Scored offline · no data stored", W - PAD, H - 26);
+  ctx.textAlign = "left";
+
+  cv.toBlob(b => {
+    downloadBlob(b, "wingspan-podium-" + stamp() + ".png");
+    toast("Podium image saved");
+  }, "image/png");
+}
+
+/* ============================================================================
+   BOOT
+   ========================================================================= */
+
+S = load() || blankState();
+$("#newGameTop").onclick = confirmNewGame;
+render();
+</script>
+</body>
+</html>
