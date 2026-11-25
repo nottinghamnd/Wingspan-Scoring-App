@@ -44,6 +44,14 @@ body{
 }
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none}
+
+/* Phones: a quick second tap on +1 / +5 should count, not zoom the page.
+   `manipulation` drops double-tap zoom (and the tap delay that comes with it)
+   but keeps pinch-zoom, so the page stays zoomable on purpose. It is set on
+   the root and repeated on controls because older iOS only honours it on the
+   element actually tapped. */
+html,button,input,select,.lg{touch-action:manipulation}
+button{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 input[type=number]{-moz-appearance:textfield}
 input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -233,6 +241,8 @@ kbd{font:inherit;font-size:11px;padding:2px 6px;border-radius:5px;border:1px sol
   background:rgba(0,0,0,.28);outline:none;font-size:15px;transition:.25s;width:100%;
 }
 .field input:focus,.field select:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(62,232,208,.13)}
+/* iOS Safari zooms into any focused field under 16px */
+@media(max-width:640px){.field input,.field select{font-size:16px}}
 .field select option{background:#0b1020;color:var(--txt)}
 .f2{display:grid;gap:13px;grid-template-columns:1fr 1fr}
 @media(max-width:560px){.f2{grid-template-columns:1fr}}
@@ -283,6 +293,7 @@ kbd{font:inherit;font-size:11px;padding:2px 6px;border-radius:5px;border:1px sol
   transition:.25s;
 }
 .stepper input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(62,232,208,.13)}
+.stepper input::placeholder,.rcell input::placeholder{color:var(--dim);opacity:1}
 .stepper .quick{
   width:auto;min-width:42px;padding:0 11px;font-size:12.5px;font-weight:650;
   letter-spacing:.01em;color:var(--dim);margin-left:2px;
@@ -625,7 +636,9 @@ const EXPANSIONS = [
 function isFlock() { return S.playerCount >= 6; }
 const MAX_PLAYERS = 7;
 
-// Official scoring order from the game's scorepad.
+// Scoring order. Follows the official scorepad, except the group scores
+// end-of-round goals last among the base categories (just before nectar and
+// hummingbirds) rather than third.
 const BASE_CATS = [
   { id: "birds",  name: "Birds",             short: "Birds",  color: "#3ee8d0", kind: "simple", unit: "points",
     rule: "Points on cards",
@@ -633,9 +646,6 @@ const BASE_CATS = [
   { id: "bonus",  name: "Bonus Cards",       short: "Bonus",  color: "#a78bfa", kind: "simple", unit: "points",
     rule: "As qualified",
     hint: "Reveal your bonus cards and score each one you qualify for. Cards you do not qualify for score nothing." },
-  { id: "goals",  name: "End-of-Round Goals", short: "Goals", color: "#fbbf24", kind: "rounds",
-    rule: "Goal board placement",
-    hint: "Enter the points each player earned on the goal board at the end of each round." },
   { id: "eggs",   name: "Eggs",              short: "Eggs",   color: "#e7edfb", kind: "simple", unit: "count", per: 1,
     rule: "1 point each",
     hint: "1 point per egg sitting on your bird cards." },
@@ -644,7 +654,10 @@ const BASE_CATS = [
     hint: "1 point per food token cached on your bird cards." },
   { id: "tucked", name: "Tucked Cards",      short: "Tucked", color: "#60a5fa", kind: "simple", unit: "count", per: 1,
     rule: "1 point each",
-    hint: "1 point per card tucked beneath your birds." }
+    hint: "1 point per card tucked beneath your birds." },
+  { id: "goals",  name: "End-of-Round Goals", short: "Goals", color: "#fbbf24", kind: "rounds",
+    rule: "Goal board placement",
+    hint: "Enter the points each player earned on the goal board at the end of each round." }
 ];
 
 const NECTAR_CAT = {
@@ -1435,6 +1448,16 @@ function wireScoring(app, cat) {
       const el = rows.querySelector('[data-sum="' + pi + '"]');
       if (el) el.innerHTML = hummingSumHTML(pi);
     }
+  });
+
+  // A field still sitting at 0 empties when you tap into it, so you can type a
+  // number straight in instead of deleting the 0 first. The faded placeholder
+  // keeps the 0 visible meanwhile, and blur puts it back if nothing was typed.
+  rows.addEventListener("focusin", e => {
+    const t = e.target;
+    if (t.tagName !== "INPUT" || t.type !== "number") return;
+    t.placeholder = "0";
+    if (t.value !== "" && Number(t.value) === 0) t.value = "";
   });
 
   rows.addEventListener("blur", e => {
