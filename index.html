@@ -196,6 +196,10 @@ kbd{font:inherit;font-size:11px;padding:2px 6px;border-radius:5px;border:1px sol
   font-weight:600;font-size:15px;transition:.3s var(--ease);font-variant-numeric:tabular-nums}
 .pill:hover{color:var(--txt);border-color:var(--line-2)}
 .pill.on{background:var(--txt);color:#04060c;border-color:var(--txt)}
+.pill small{display:inline-block;margin-left:7px;padding:1px 6px;border-radius:999px;font-size:9.5px;
+  letter-spacing:.14em;text-transform:uppercase;font-weight:700;vertical-align:2px;
+  color:var(--orange);border:1px solid rgba(251,146,60,.4);background:rgba(251,146,60,.1)}
+.pill.on small{color:#04060c;border-color:rgba(4,6,12,.3);background:rgba(4,6,12,.08)}
 .plist{display:grid;gap:11px}
 .prow{display:flex;align-items:center;gap:13px;padding:11px 15px;border-radius:var(--r);
   border:1px solid var(--line);background:var(--panel);transition:.3s var(--ease)}
@@ -289,6 +293,7 @@ kbd{font:inherit;font-size:11px;padding:2px 6px;border-radius:5px;border:1px sol
 .pts{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:64px;text-align:right;
   flex:0 0 auto}
 .pts b{color:var(--cyan);font-weight:650}
+.pts b.neg{color:var(--rose)}
 
 /* goal-board place-point reference */
 .goalref{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:-18px 0 26px}
@@ -414,6 +419,14 @@ kbd{font:inherit;font-size:11px;padding:2px 6px;border-radius:5px;border:1px sol
   .insp{font-size:21px}
   .chart.inspecting .ctotal{font-size:13px}
 }
+/* a negative category (hummingbird tracks) strikes points back off the end of the bar */
+.debit{position:absolute;top:0;bottom:0;left:0;width:0;z-index:1;pointer-events:none;
+  background:repeating-linear-gradient(135deg,rgba(251,113,133,.62) 0 4px,rgba(4,6,12,.55) 4px 8px);
+  box-shadow:inset 0 0 0 1px rgba(251,113,133,.7)}
+.chart.inspecting .debit{opacity:.18}
+.chart.inspecting .debit.lit{opacity:1}
+.add.neg{color:var(--rose)!important}
+
 /* one faint division per point, drawn only when a point is wide enough to read */
 .ticks{position:absolute;inset:0;border-radius:9px;pointer-events:none;opacity:.5}
 
@@ -600,10 +613,17 @@ const EXPANSIONS = [
     desc: "Adds nectar. At game end the most and second-most spent nectar in each habitat scores 5 and 2.",
     adds: "Adds a Nectar round" },
   { id: "asia", name: "Asia",
-    desc: "New birds, bonus cards and goals. Duet and Flock modes are not included yet." },
+    desc: "New birds, bonus cards and goals. Unlocks Flock mode for 6 or 7 players on the Players step. " +
+          "Duet mode is not included yet." },
   { id: "americas", name: "Americas",
-    desc: "New birds and bonus cards, scored with the standard categories." }
+    desc: "Adds hummingbirds. At game end each player scores the token positions on their five " +
+          "hummingbird tracks — some positions are worth negative points.",
+    adds: "Adds a Hummingbird round" }
 ];
+
+/* Flock mode is Asia's 6-7 player mode. It is implied by the player count. */
+function isFlock() { return S.playerCount >= 6; }
+const MAX_PLAYERS = 7;
 
 // Official scoring order from the game's scorepad.
 const BASE_CATS = [
@@ -631,6 +651,17 @@ const NECTAR_CAT = {
   id: "nectar", name: "Nectar", short: "Nectar", color: "#fb923c", kind: "nectar",
   rule: "5 / 2 per habitat",
   hint: "Count each player's spent nectar in each habitat. Most scores 5, second-most scores 2 — per habitat."
+};
+
+/* Americas. Hummingbird cards carry no printed points; the score comes from the
+   five hummingbird tracks, and a track position can be worth negative points. */
+const HUMMINGBIRD_TRACKS = 5;
+const HUMMING_MIN = -20;   // floor for a single track entry
+const HUMMINGBIRD_CAT = {
+  id: "humming", name: "Hummingbirds", short: "Humming", color: "#e879f9", kind: "humming",
+  rule: "Hummingbird tracks",
+  hint: "For each of your five hummingbird tracks, enter the points shown at your token's position. " +
+        "Some positions are negative — the minus button goes below zero."
 };
 
 /* Built-in house rules. Each one is a toggle on the setup screen and is applied
@@ -692,10 +723,11 @@ function blankState() {
     rules: { eightRounds: false },   // built-in house rules
     custom: [],              // extra house-rule scoring categories
     playerCount: 2,
-    players: [0, 1, 2, 3, 4].map(mkPlayer),
+    players: Array.from({ length: MAX_PLAYERS }, (_, i) => mkPlayer(i)),
     simple: {},              // { catId: { playerIndex: number } }
     goals:  {},              // { playerIndex: [r1,r2,r3,r4] }
     nectar: {},              // { playerIndex: { forest, grassland, wetland } }
+    humming: {},             // { playerIndex: [track1..track5] } — may be negative
     tiebreak: {},            // { playerIndex: leftover food tokens }
     stepIndex: 0,
     revealPlayed: false,
@@ -714,6 +746,8 @@ function load() {
     if (!o || o.v !== 1) return null;
     o.rules = o.rules || { eightRounds: false };   // forward-compatible defaults
     o.tiebreak = o.tiebreak || {};
+    o.humming = o.humming || {};
+    while (o.players.length < MAX_PLAYERS) o.players.push(mkPlayer(o.players.length));
     return o;
   } catch (e) { return null; }
 }
@@ -753,6 +787,9 @@ function categories() {
     }
     cats.splice(at, 0, cat);
   });
+
+  // Hummingbirds are always scored last, after any house-rule rows.
+  if (S.expansions.americas) cats.push(Object.assign({}, HUMMINGBIRD_CAT));
   return cats;
 }
 
@@ -768,8 +805,9 @@ function nectarPoints() {
     const first = ranked[0];
     const firstCount = vals.filter(v => v === first).length;
     vals.forEach((v, i) => { if (v === first) out[i] += 5; });
-    // A tie for most consumes the second-place award as well.
-    if (firstCount === 1 && ranked.length > 1) {
+    // Standard rules: a tie for most consumes the second-place award as well.
+    // Flock mode uses friendly ties: second place is still awarded after a tie.
+    if ((firstCount === 1 || isFlock()) && ranked.length > 1) {
       const second = ranked[1];
       vals.forEach((v, i) => { if (v === second) out[i] += 2; });
     }
@@ -777,8 +815,18 @@ function nectarPoints() {
   return out;
 }
 
+function hummingFor(i) {
+  return (S.humming[i] || []).slice(0, HUMMINGBIRD_TRACKS).reduce((a, b) => a + (Number(b) || 0), 0);
+}
+
+function hummingSumHTML(i) {
+  const v = hummingFor(i);
+  return '= <b class="' + (v < 0 ? "neg" : "") + '">' + (v < 0 ? "−" + (-v) : v) + "</b> pts";
+}
+
 function catScore(cat, i) {
   if (cat.kind === "nectar") return nectarPoints()[i] || 0;
+  if (cat.kind === "humming") return hummingFor(i);
   if (cat.kind === "rounds") {
     // Slice so entries left behind by a longer variant never leak into the total.
     return (S.goals[i] || []).slice(0, goalRounds()).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -991,8 +1039,9 @@ function setupExpansions(app) {
       "</button>"
     ).join("") + "</div>" +
     '<div class="note">' + ICON.info +
-      "<div>Only <b>Oceania</b> changes the scoring sheet, by adding a nectar round at the end. " +
-      "The other expansions add birds, bonus cards and goal tiles that score through the standard categories.</div></div>" +
+      "<div><b>Oceania</b> adds a nectar round and <b>Americas</b> adds a hummingbird round, both scored at the end. " +
+      "European and Asia add birds, bonus cards and goal tiles that score through the standard categories &mdash; " +
+      "and Asia&rsquo;s Flock mode for 6&ndash;7 players is picked on the Players step.</div></div>" +
     '<div class="actions">' +
       '<button class="btn btn-primary" data-go="1">Continue ' + ICON.arrow + "</button>" +
       '<span class="hintline">' + esc(expansionSummary()) + "</span>" +
@@ -1116,16 +1165,23 @@ function afterLabel(id) {
 }
 
 function setupPlayers(app) {
-  while (S.players.length < 5) S.players.push(mkPlayer(S.players.length));
+  while (S.players.length < MAX_PLAYERS) S.players.push(mkPlayer(S.players.length));
 
   app.innerHTML =
     '<section class="screen">' + setupRailHTML() +
     '<p class="eyebrow">Setup</p>' +
     '<h1>Who is <span class="accent">playing</span>?</h1>' +
     '<p class="sub">Names show up on the scoring sheet and on the final standings. Tap a colour dot to change it.</p>' +
-    '<div class="pills">' + [2, 3, 4, 5].map(n =>
-      '<button class="pill ' + (S.playerCount === n ? "on" : "") + '" data-pc="' + n + '">' + n + " players</button>"
+    '<div class="pills">' + [2, 3, 4, 5, 6, 7].map(n =>
+      '<button class="pill ' + (S.playerCount === n ? "on " : "") + (n >= 6 ? "flock" : "") + '" data-pc="' + n + '">' +
+        n + " players" + (n >= 6 ? '<small>Flock</small>' : "") + "</button>"
     ).join("") + "</div>" +
+    (isFlock()
+      ? '<div class="note" style="margin:-8px 0 22px">' + ICON.info +
+        "<div><b>Flock mode</b> (Wingspan Asia) &mdash; Asia has been switched on for you. " +
+        "End-of-round goals and nectar use <b>friendly ties</b>: everyone tied for first scores full points, " +
+        "and second place is still awarded.</div></div>"
+      : "") +
     '<div class="plist">' + S.players.slice(0, S.playerCount).map((p, i) =>
       '<div class="prow">' +
         '<button class="swatch" data-color="' + i + '" style="color:' + p.color + ';background:' + p.color + '" title="Change colour"></button>' +
@@ -1143,6 +1199,7 @@ function setupPlayers(app) {
     const b = e.target.closest("[data-pc]");
     if (!b) return;
     S.playerCount = Number(b.dataset.pc);
+    if (isFlock()) S.expansions.asia = true;   // Flock mode is part of Asia
     render();
   };
   $(".plist", app).addEventListener("input", e => {
@@ -1223,6 +1280,25 @@ function renderScoring(app) {
         '<div class="nectar-badge" data-nb="' + p.i + '">' + np[p.i] + " pts</div>" +
       "</div>"
     ).join("");
+  } else if (cat.kind === "humming") {
+    rowsHTML = players.map(p => {
+      const cells = '<div class="rgrid">' + Array.from({ length: HUMMINGBIRD_TRACKS }, (_, t) =>
+        '<div class="rcell hcell"><label>Track ' + (t + 1) + "</label>" +
+          '<div class="rspin">' +
+            '<input type="number" inputmode="numeric" min="' + HUMMING_MIN + '" max="99" data-h="' + p.i + "|" + t +
+            '" value="' + ((S.humming[p.i] || [])[t] || 0) + '">' +
+            '<span class="rbtns">' +
+              '<button data-hstep="' + p.i + "|" + t + '|1" aria-label="plus">+</button>' +
+              '<button data-hstep="' + p.i + "|" + t + '|-1" aria-label="minus">&minus;</button>' +
+            "</span>" +
+          "</div></div>"
+      ).join("") + "</div>";
+      return '<div class="srow rounds stack">' +
+          '<div class="srow-top">' + pnHTML(p) +
+            '<div class="pts" data-sum="' + p.i + '">' + hummingSumHTML(p.i) + "</div>" +
+          "</div>" + cells +
+        "</div>";
+    }).join("");
   } else if (cat.kind === "tiebreak") {
     rowsHTML = players.map(p =>
       '<div class="srow">' + pnHTML(p) +
@@ -1262,21 +1338,40 @@ function renderScoring(app) {
         (cat.custom ? '<span class="stepno" style="color:' + cat.color + '">House rule</span>' : "") +
         (cat.kind === "rounds" && S.rules.eightRounds
           ? '<span class="stepno" style="color:' + cat.color + '">8-round variant</span>' : "") +
+        ((cat.kind === "rounds" || cat.kind === "nectar") && isFlock()
+          ? '<span class="stepno" style="color:var(--orange)">Flock mode</span>' : "") +
+        (cat.kind === "humming" ? '<span class="stepno" style="color:' + cat.color + '">Americas</span>' : "") +
       "</div>" +
       "<h1><span class=\"catdot\" style=\"background:" + cat.color +
         ";box-shadow:0 0 18px " + cat.color + "\"></span>" + esc(cat.name) + "</h1>" +
       '<p class="sub">' + esc(cat.hint) + "</p>" +
-      (cat.kind === "rounds"
+      // The standard place-point strip describes the base game's green board; the
+      // Flock board carries its own values, so it only shows outside Flock mode.
+      (cat.kind === "rounds" && !isFlock()
         ? '<div class="goalref"><span class="grl">Place points</span>' +
           placePointRef().map(([r, v]) =>
             '<span class="gr">' + r + " &middot; <b>" + v + "</b></span>").join("") +
           "</div>"
         : "") +
       '<div class="srows">' + rowsHTML + "</div>" +
+      (cat.kind === "rounds" && isFlock()
+        ? '<div class="note">' + ICON.info +
+          "<div><b>Flock mode:</b> read each round&rsquo;s points off the Flock goal board. Ties are " +
+          "<b>friendly</b> &mdash; everyone tied for a place scores its full points, and the next place is still " +
+          "awarded.</div></div>"
+        : "") +
       (cat.kind === "nectar"
         ? '<div class="note">' + ICON.info +
-          "<div>Ties are handled the official way: players tied for the most nectar in a habitat " +
-          "<b>all score 5</b>, and nobody scores the 2. A habitat with no nectar scores nothing.</div></div>"
+          (isFlock()
+            ? "<div><b>Flock mode &mdash; friendly ties:</b> everyone tied for the most nectar in a habitat scores 5, " +
+              "and the next-highest still scores 2. A habitat with no nectar scores nothing.</div></div>"
+            : "<div>Ties are handled the official way: players tied for the most nectar in a habitat " +
+              "<b>all score 5</b>, and nobody scores the 2. A habitat with no nectar scores nothing.</div></div>")
+        : "") +
+      (cat.kind === "humming"
+        ? '<div class="note">' + ICON.info +
+          "<div>Hummingbird cards have no printed points &mdash; their score comes entirely from these tracks. " +
+          "A negative total takes points <b>off</b> the final score.</div></div>"
         : "") +
       (cat.kind === "tiebreak"
         ? '<div class="note">' + ICON.info +
@@ -1331,6 +1426,14 @@ function wireScoring(app, cat) {
       save();
       const np = nectarPoints();
       $$("[data-nb]", rows).forEach(b => { b.textContent = (np[Number(b.dataset.nb)] || 0) + " pts"; });
+    } else if (t.dataset.h !== undefined) {
+      const [pi, ti] = t.dataset.h.split("|").map(Number);
+      S.humming[pi] = S.humming[pi] || [0, 0, 0, 0, 0];
+      // Number("-") is NaN while someone is mid-way through typing a negative.
+      S.humming[pi][ti] = clamp(Math.trunc(Number(t.value)) || 0, HUMMING_MIN, 99);
+      save();
+      const el = rows.querySelector('[data-sum="' + pi + '"]');
+      if (el) el.innerHTML = hummingSumHTML(pi);
     }
   });
 
@@ -1340,8 +1443,8 @@ function wireScoring(app, cat) {
 
   // Grid spinners reuse the input handler above by re-dispatching, so the state
   // and derived displays stay in exactly one place.
-  const bump = (inp, d, max) => {
-    inp.value = clamp((Number(inp.value) || 0) + d, 0, max);
+  const bump = (inp, d, max, min) => {
+    inp.value = clamp((Number(inp.value) || 0) + d, min || 0, max);
     inp.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
@@ -1365,6 +1468,12 @@ function wireScoring(app, cat) {
     if (nb) {
       const parts = nb.dataset.nstep.split("|");
       bump(rows.querySelector('[data-n="' + parts[0] + "|" + parts[1] + '"]'), Number(parts[2]), 99);
+      return;
+    }
+    const hb = e.target.closest("[data-hstep]");
+    if (hb) {
+      const parts = hb.dataset.hstep.split("|");
+      bump(rows.querySelector('[data-h="' + parts[0] + "|" + parts[1] + '"]'), Number(parts[2]), 99, HUMMING_MIN);
     }
   });
 
@@ -1419,7 +1528,10 @@ function renderReveal(app) {
   const players = activePlayers();
   const seg     = players.map(p => cats.map(c => catScore(c, p.i)));
   const totals  = seg.map(a => a.reduce((x, y) => x + y, 0));
-  const scaleMax = Math.max(1, Math.max.apply(null, totals)) * 1.04;
+  // The bar has to fit every positive point before a negative category strikes
+  // some back off, so scale to the positive sum rather than the final total.
+  const posSums = seg.map(a => a.reduce((x, y) => x + Math.max(0, y), 0));
+  const scaleMax = Math.max(1, Math.max.apply(null, posSums)) * 1.04;
 
   app.innerHTML =
     '<section class="screen reveal-wrap">' +
@@ -1436,6 +1548,7 @@ function renderReveal(app) {
             '<div class="seg" data-seg="' + p.i + "|" + c.id + '" style="background:' + c.color + '"></div>'
           ).join("") + "</div>" +
             '<div class="ticks" data-ticks></div>' +
+            '<div class="debit" data-debit="' + p.i + '"></div>' +
             '<span class="head" data-head="' + p.i + '" style="color:' + p.color + ";background:" + p.color + '"></span>' +
             '<span class="add" data-add="' + p.i + '" style="color:' + p.color + '"></span>' +
           "</div>" +
@@ -1512,7 +1625,8 @@ function renderReveal(app) {
     h.style.left = pct + "%";
     h.style.opacity = visible ? "1" : "0";
     a.style.left = pct + "%";
-    a.textContent = "+" + add;
+    a.textContent = add < 0 ? "−" + (-add) : "+" + add;
+    a.classList.toggle("neg", add < 0);
     // Flip the chip back over the bar once the marker nears the right edge.
     a.style.transform = frac > 0.72
       ? "translate(calc(-100% - 14px),-50%)"
@@ -1521,6 +1635,15 @@ function renderReveal(app) {
   }
   function hideHeads() {
     players.forEach(p => { headEls[p.i].style.opacity = "0"; addEls[p.i].style.opacity = "0"; });
+  }
+
+  /** Hatch the stretch of bar between two point values to show points struck back off. */
+  function setDebit(pi, from, to) {
+    const el = app.querySelector('[data-debit="' + players[pi].i + '"]');
+    const lo = clamp(Math.min(from, to) / scaleMax, 0, 1) * 100;
+    const hi = clamp(Math.max(from, to) / scaleMax, 0, 1) * 100;
+    el.style.left = lo + "%";
+    el.style.width = (hi - lo) + "%";
   }
 
   function markLead() {
@@ -1564,6 +1687,7 @@ function renderReveal(app) {
 
     players.forEach((p, pi) => {
       cats.forEach((cc, ci) => segEls[pi][ci].classList.toggle("lit", !!c && cc.id === c.id));
+      app.querySelector('[data-debit="' + p.i + '"]').classList.toggle("lit", !!c && c.kind === "humming");
       const box = app.querySelector('[data-insp="' + p.i + '"]');
       if (c) {
         box.textContent = catScore(c, p.i);
@@ -1621,7 +1745,8 @@ function renderReveal(app) {
   /** Freeze the bars at their final widths and clear the running-tally chrome. */
   function freezeBars() {
     players.forEach((p, pi) => {
-      cats.forEach((c, ci) => { segEls[pi][ci].style.width = (seg[pi][ci] / scaleMax * 100) + "%"; });
+      cats.forEach((c, ci) => { segEls[pi][ci].style.width = (Math.max(0, seg[pi][ci]) / scaleMax * 100) + "%"; });
+      setDebit(pi, totals[pi], posSums[pi]);
       totEls[p.i].textContent = totals[pi];
       rowEls[p.i].classList.remove("lead");
     });
@@ -1729,7 +1854,8 @@ function renderReveal(app) {
      a category simply keeps moving after the others have stopped. Each category
      then holds for a beat before the next one starts. */
   let ci = 0;
-  const running = players.map(() => 0);
+  const running = players.map(() => 0);   // score so far, negatives included
+  const posRun  = players.map(() => 0);   // how far the coloured bar reaches
 
   function stepCat() {
     if (ci >= cats.length) {
@@ -1740,10 +1866,12 @@ function renderReveal(app) {
     setCatHead(cat);
     $$(".lg", app).forEach(l => l.classList.toggle("hot", l.dataset.lg === cat.id));
 
-    const peak = Math.max.apply(null, players.map((p, pi) => seg[pi][idx]));
+    // Pace on magnitude, so a category that takes points away runs at the same
+    // 5 pts/sec as one that adds them — the marker just travels backwards.
+    const peak = Math.max.apply(null, players.map((p, pi) => Math.abs(seg[pi][idx])));
     const dur  = peak > 0 ? (peak / RATE) * 1000 : EMPTY;
 
-    players.forEach((p, pi) => setHead(pi, running[pi] / scaleMax, 0, seg[pi][idx] > 0));
+    players.forEach((p, pi) => setHead(pi, running[pi] / scaleMax, 0, seg[pi][idx] !== 0));
 
     const t0 = performance.now();
     (function frame(now) {
@@ -1751,18 +1879,21 @@ function renderReveal(app) {
       const front = peak * t;                       // points released so far this category
       players.forEach((p, pi) => {
         const v = seg[pi][idx];
-        const got = Math.min(v, front);             // each player stops at their own value
-        segEls[pi][idx].style.width = (got / scaleMax * 100) + "%";
+        // each player stops at their own value, in whichever direction it runs
+        const got = Math.sign(v) * Math.min(Math.abs(v), front);
+        if (v >= 0) segEls[pi][idx].style.width = (got / scaleMax * 100) + "%";
+        else setDebit(pi, running[pi] + got, posRun[pi]);
         totEls[p.i].textContent = Math.round(running[pi] + got);
-        setHead(pi, (running[pi] + got) / scaleMax, Math.round(got), v > 0);
+        setHead(pi, (running[pi] + got) / scaleMax, Math.round(got), v !== 0);
       });
       markLead();
       if (t < 1) { revealRAF = requestAnimationFrame(frame); return; }
 
       players.forEach((p, pi) => {
         running[pi] += seg[pi][idx];
+        posRun[pi]  += Math.max(0, seg[pi][idx]);
         totEls[p.i].textContent = running[pi];
-        setHead(pi, running[pi] / scaleMax, seg[pi][idx], seg[pi][idx] > 0);
+        setHead(pi, running[pi] / scaleMax, seg[pi][idx], seg[pi][idx] !== 0);
       });
       ci++;
       revealTimers.push(setTimeout(stepCat, HOLD));
@@ -1897,7 +2028,7 @@ function exportCSV() {
   L.push(["Date", new Date().toLocaleString()].map(csvCell).join(","));
   L.push(["Expansions", expansionSummary()].map(csvCell).join(","));
   L.push(["House rules", houseRuleSummary()].map(csvCell).join(","));
-  L.push(["Players", S.playerCount].map(csvCell).join(","));
+  L.push(["Players", S.playerCount + (isFlock() ? " (Flock mode)" : "")].map(csvCell).join(","));
   L.push("");
   L.push(["Rank", "Player"].concat(cats.map(c => c.name),
     ["Total", "Leftover food (tiebreak)", "Won on tiebreak"]).map(csvCell).join(","));
@@ -1970,7 +2101,7 @@ function exportPNG() {
   ctx.fillStyle = "#8d99b2";
   ctx.font = "400 16px " + FONT;
   ctx.fillText(new Date().toLocaleString() + "   ·   " + expansionSummary() +
-               "   ·   " + S.playerCount + " players", PAD, 150);
+               "   ·   " + S.playerCount + " players" + (isFlock() ? " (Flock mode)" : ""), PAD, 150);
   if (S.custom.length) {
     ctx.fillStyle = "#5b667e";
     ctx.font = "400 14px " + FONT;
@@ -2052,7 +2183,9 @@ function exportPNG() {
   tracked(ctx, "SCORE BREAKDOWN", PAD, listTop, 4.5);
 
   const barX = 380, barW = W - PAD - 120 - barX, barH = 28;
-  const maxTotal = Math.max(1, st[0] ? st[0].total : 1);
+  // Scale to the longest positive stack, same as the on-screen chart.
+  const posOf = r => cats.reduce((s, c) => s + Math.max(0, catScore(c, r.i)), 0);
+  const maxTotal = Math.max(1, Math.max.apply(null, st.map(posOf)));
   st.forEach((r, i) => {
     const y = listTop + 34 + i * rowH;
     const cy = y + barH / 2;
@@ -2088,6 +2221,17 @@ function exportPNG() {
       ctx.fillRect(cx, y, w, 1.5);
       cx += w;
     });
+    // Points struck back off by a negative category: hatch the end of the bar.
+    if (r.total < posOf(r)) {
+      const x0 = barX + Math.max(0, r.total) / maxTotal * barW;
+      ctx.fillStyle = "rgba(4,6,12,.55)";
+      ctx.fillRect(x0, y, cx - x0, barH);
+      ctx.strokeStyle = "rgba(251,113,133,.75)"; ctx.lineWidth = 2.5;
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, y, cx - x0, barH); ctx.clip();
+      ctx.beginPath();
+      for (let hx = x0 - barH; hx < cx; hx += 8) { ctx.moveTo(hx, y + barH); ctx.lineTo(hx + barH, y); }
+      ctx.stroke(); ctx.restore();
+    }
     ctx.restore();
 
     ctx.fillStyle = r.rank === 1 ? "#fbbf24" : "#e9eef8";
